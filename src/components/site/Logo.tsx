@@ -1,14 +1,21 @@
 import { Link } from "@tanstack/react-router";
+import logoAsset from "@/assets/tnt-tools-logo.png.asset.json";
 
 export function Logo({ className = "" }: { className?: string }) {
   return (
-    <Link to="/" className={`group flex items-center gap-2 ${className}`} aria-label="TNT Tools home">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-sm bg-primary font-display text-lg font-extrabold text-primary-foreground transition-transform group-hover:rotate-3">
-        T
-      </span>
-      <span className="font-display text-xl font-extrabold tracking-tight">
-        TNT<span className="text-primary">TOOLS</span>
-      </span>
+    <Link
+      to="/"
+      className={`group flex items-center gap-2 ${className}`}
+      aria-label="TNT Tools home"
+    >
+      <img
+        src={logoAsset.url}
+        alt="TNT Tools"
+        width={200}
+        height={200}
+        className="h-11 w-auto transition-transform duration-300 group-hover:scale-105"
+      />
+      <span className="sr-only">TNT Tools</span>
     </Link>
   );
 }
