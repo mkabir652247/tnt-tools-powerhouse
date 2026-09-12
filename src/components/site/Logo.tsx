@@ -13,7 +13,7 @@ export function Logo({ className = "" }: { className?: string }) {
         alt="TNT Tools"
         width={200}
         height={200}
-        className="h-11 w-auto transition-transform duration-300 group-hover:scale-105"
+        className="h-16 w-auto transition-transform duration-300 group-hover:scale-105 sm:h-20"
       />
       <span className="sr-only">TNT Tools</span>
     </Link>
