@@ -29,7 +29,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="hazard-stripe h-1 w-full" />
-      <div className="container-tnt flex h-16 items-center gap-4">
+      <div className="container-tnt flex min-h-20 items-center gap-4 py-2 sm:min-h-24">
         <Logo />
 
         <nav className="ml-6 hidden items-center gap-6 lg:flex">
