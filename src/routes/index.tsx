@@ -145,7 +145,7 @@ function Home() {
                   className="flex items-center gap-2 rounded-sm border border-border bg-surface px-3 py-2.5"
                 >
                   <Icon width={16} height={16} className="shrink-0 text-primary" />
-                  <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide">
+                  <span className="min-w-0 text-[11px] font-semibold uppercase leading-tight tracking-wide">
                     {label}
                   </span>
                 </li>
