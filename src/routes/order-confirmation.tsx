@@ -2,12 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, Package, Truck } from "lucide-react";
 import { formatPrice } from "@/data/products";
 
-type ConfirmSearch = { order?: string; total?: number };
+type ConfirmSearch = { order?: string | undefined; total?: number | undefined };
 
 export const Route = createFileRoute("/order-confirmation")({
   validateSearch: (search: Record<string, unknown>): ConfirmSearch => ({
-    order: search.order ? String(search.order) : undefined,
-    total: search.total ? Number(search.total) : undefined,
+    order: search["order"] ? String(search["order"]) : undefined,
+    total: search["total"] ? Number(search["total"]) : undefined,
   }),
   head: () => ({
     meta: [

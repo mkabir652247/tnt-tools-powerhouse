@@ -57,15 +57,17 @@ function Contact() {
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <form onSubmit={onSubmit} className="rounded-lg border border-border bg-surface p-6" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Name" name="name" error={errors.name} />
-            <Field label="Email" name="email" type="email" error={errors.email} />
+            <Field label="Name" name="name" error={errors["name"]} />
+            <Field label="Email" name="email" type="email" error={errors["email"]} />
           </div>
           <div className="mt-4">
             <label htmlFor="message" className="mb-1.5 block text-sm font-semibold">
               Message
             </label>
             <textarea id="message" name="message" rows={5} maxLength={1000} className="field-tnt" />
-            {errors.message && <p className="mt-1 text-xs text-destructive">{errors.message}</p>}
+            {errors["message"] && (
+              <p className="mt-1 text-xs text-destructive">{errors["message"]}</p>
+            )}
           </div>
           <button type="submit" className="btn-orange mt-5">
             Send Message
@@ -115,8 +117,8 @@ function Field({
 }: {
   label: string;
   name: string;
-  type?: string;
-  error?: string;
+  type?: string | undefined;
+  error?: string | undefined;
 }) {
   return (
     <div>
