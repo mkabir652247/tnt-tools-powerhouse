@@ -15,26 +15,26 @@ import { ProductCard } from "@/components/site/ProductCard";
 import { QuickView } from "@/components/site/QuickView";
 
 type ShopSearch = {
-  q?: string;
-  category?: string;
-  sort?: string;
-  max?: number;
-  brand?: string;
-  rating?: number;
-  type?: string;
-  inStock?: boolean;
+  q?: string | undefined;
+  category?: string | undefined;
+  sort?: string | undefined;
+  max?: number | undefined;
+  brand?: string | undefined;
+  rating?: number | undefined;
+  type?: string | undefined;
+  inStock?: boolean | undefined;
 };
 
 export const Route = createFileRoute("/shop")({
   validateSearch: (search: Record<string, unknown>): ShopSearch => ({
-    q: search.q ? String(search.q) : undefined,
-    category: search.category ? String(search.category) : undefined,
-    sort: search.sort ? String(search.sort) : undefined,
-    max: search.max ? Number(search.max) : undefined,
-    brand: search.brand ? String(search.brand) : undefined,
-    rating: search.rating ? Number(search.rating) : undefined,
-    type: search.type ? String(search.type) : undefined,
-    inStock: search.inStock ? Boolean(search.inStock) : undefined,
+    q: search["q"] ? String(search["q"]) : undefined,
+    category: search["category"] ? String(search["category"]) : undefined,
+    sort: search["sort"] ? String(search["sort"]) : undefined,
+    max: search["max"] ? Number(search["max"]) : undefined,
+    brand: search["brand"] ? String(search["brand"]) : undefined,
+    rating: search["rating"] ? Number(search["rating"]) : undefined,
+    type: search["type"] ? String(search["type"]) : undefined,
+    inStock: search["inStock"] ? Boolean(search["inStock"]) : undefined,
   }),
   head: () => ({
     meta: [
