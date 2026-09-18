@@ -12,7 +12,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import heroImage from "@/assets/hero-tools.jpg";
+import heroImage from "@/assets/tnt-hero-promo.jpeg.asset.json";
 import workshopImage from "@/assets/workshop.jpg";
 import promoImage from "@/assets/product-angle-grinder.jpg";
 import { categories, products, type Product } from "@/data/products";
@@ -154,8 +154,8 @@ function Home() {
           </div>
           <div className="relative">
             <img
-              src={heroImage}
-              alt="Cordless drill, angle grinder, impact driver and water pump from TNT Tools"
+              src={heroImage.url}
+              alt="TNT Tools power tools arranged around the TNT Tools logo"
               width={1536}
               height={1024}
               className="glow-orange w-full rounded-lg border border-border object-cover"
