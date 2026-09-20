@@ -14,3 +14,11 @@
 - [x] Customer account UI
 - [x] Uploaded TNT Tools logo + site icon, accent retheme to logo red
 - [x] Larger logo in the header
+
+## Backend (Supabase) build
+- [x] Stage 1: database foundation (categories, products, images, specs, inventory movements, orders, order items, roles, RLS)
+- [ ] Stage 2: admin auth + role assignment, /admin gate
+- [ ] Stage 3: admin dashboard
+- [ ] Stage 4: product + inventory management
+- [ ] Stage 5: order management
+- [ ] Stage 6: storefront integration, image storage, testing
