@@ -430,6 +430,34 @@ function AdminProducts() {
     },
   });
 
+  // Safe delete: products that appear in any order are hidden instead, to keep order history intact.
+  const removeProduct = useMutation({
+    mutationFn: async (product: ProductRow) => {
+      const { count, error: countError } = await supabase
+        .from("order_items")
+        .select("id", { count: "exact", head: true })
+        .eq("product_id", product.id);
+      if (countError) throw countError;
+      if ((count ?? 0) > 0) {
+        throw new Error(
+          `"${product.name}" is part of ${count} order(s), so it can't be deleted. Use "Hide" to remove it from the store instead.`,
+        );
+      }
+      const { error } = await supabase.from("products").delete().eq("id", product.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setNotice("Product deleted.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "products"] }),
+        queryClient.invalidateQueries({ queryKey: ["storefront", "catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] }),
+      ]);
+    },
+    onError: (error) => setNotice((error as Error).message),
+  });
+
+
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (query.data?.products ?? []).filter((product) => {
@@ -708,6 +736,18 @@ function AdminProducts() {
                       className="ml-3 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
                     >
                       {product.is_active ? "Hide" : "Publish"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={removeProduct.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Delete "${product.name}" permanently?`)) {
+                          removeProduct.mutate(product);
+                        }
+                      }}
+                      className="ml-3 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    >
+                      Delete
                     </button>
                   </td>
                 </tr>
