@@ -156,6 +156,8 @@ export type Database = {
           payment_status: Database["public"]["Enums"]["payment_status"]
           shipping_address: string
           shipping_fee: number
+          stock_deducted: boolean
+          stock_restored: boolean
           subtotal: number
           total_amount: number
           updated_at: string
@@ -176,6 +178,8 @@ export type Database = {
           payment_status?: Database["public"]["Enums"]["payment_status"]
           shipping_address: string
           shipping_fee?: number
+          stock_deducted?: boolean
+          stock_restored?: boolean
           subtotal?: number
           total_amount?: number
           updated_at?: string
@@ -196,6 +200,8 @@ export type Database = {
           payment_status?: Database["public"]["Enums"]["payment_status"]
           shipping_address?: string
           shipping_fee?: number
+          stock_deducted?: boolean
+          stock_restored?: boolean
           subtotal?: number
           total_amount?: number
           updated_at?: string
@@ -401,12 +407,38 @@ export type Database = {
         }
         Returns: number
       }
+      admin_adjust_stock: {
+        Args: {
+          _change: number
+          _note?: string
+          _product_id: string
+          _type: Database["public"]["Enums"]["movement_type"]
+        }
+        Returns: number
+      }
+      admin_update_order: {
+        Args: {
+          _notes: string
+          _order_id: string
+          _order_status: Database["public"]["Enums"]["order_status"]
+          _payment_status: Database["public"]["Enums"]["payment_status"]
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      place_order: {
+        Args: { _items: Json; _order: Json }
+        Returns: {
+          order_id: string
+          order_number: string
+          total_amount: number
+        }[]
       }
     }
     Enums: {
