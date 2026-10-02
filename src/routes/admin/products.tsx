@@ -34,6 +34,15 @@ type ProductRow = {
 
 type CategoryRow = { id: string; name: string; slug: string; is_active: boolean };
 
+const PRODUCT_IMAGE_BUCKET = "product-images";
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/avif": "avif",
+};
+
 type ProductDraft = {
   id?: string;
   name: string;
@@ -295,6 +304,14 @@ function AdminProducts() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [notice, setNotice] = useState<string | null>(null);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+
+  const clearUploadStatus = () => {
+    setUploadError(null);
+    setUploadNotice(null);
+  };
 
   const query = useQuery({ queryKey: ["admin", "products"], queryFn: loadAdminProducts });
   const save = useMutation({
@@ -414,6 +431,70 @@ function AdminProducts() {
     setEditing((current) => (current ? { ...current, [key]: value } : current));
   };
 
+  const appendImageUrls = (urls: string[]) => {
+    setEditing((current) => {
+      if (!current) return current;
+      const existing = current.image_urls
+        .split(/\r?\n/)
+        .map((url) => url.trim())
+        .filter(Boolean);
+      return { ...current, image_urls: [...new Set([...existing, ...urls])].join("\n") };
+    });
+  };
+
+  async function uploadImages(fileList: FileList | null) {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    clearUploadStatus();
+
+    for (const file of files) {
+      if (!IMAGE_EXTENSIONS[file.type]) {
+        setUploadError(`${file.name} is not a supported image. Use JPEG, PNG, WebP, or AVIF.`);
+        return;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        setUploadError(`${file.name} is larger than the 10 MB limit.`);
+        return;
+      }
+    }
+
+    setUploadingImages(true);
+    const uploadedUrls: string[] = [];
+    try {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!data.user) throw new Error("Sign in as an administrator before uploading images.");
+
+      const storage = supabase.storage.from(PRODUCT_IMAGE_BUCKET);
+      for (const file of files) {
+        const extension = IMAGE_EXTENSIONS[file.type];
+        const path = `${data.user.id}/${crypto.randomUUID()}.${extension}`;
+        const { data: uploaded, error } = await storage.upload(path, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: false,
+        });
+        if (error) throw error;
+
+        const { data: publicData } = storage.getPublicUrl(uploaded.path);
+        uploadedUrls.push(publicData.publicUrl);
+        appendImageUrls([publicData.publicUrl]);
+      }
+      setUploadNotice(
+        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Save the product to attach them to the listing.`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Image upload failed.";
+      setUploadError(
+        uploadedUrls.length > 0
+          ? `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded; another upload failed: ${message}`
+          : message,
+      );
+    } finally {
+      setUploadingImages(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
@@ -425,6 +506,7 @@ function AdminProducts() {
           type="button"
           onClick={() => {
             setNotice(null);
+            clearUploadStatus();
             setEditing(blankDraft());
           }}
           className="btn-orange ml-auto px-4 py-2 text-xs"
@@ -510,7 +592,10 @@ function AdminProducts() {
           {products.length === 0 && (
             <button
               type="button"
-              onClick={() => setEditing(blankDraft())}
+              onClick={() => {
+                clearUploadStatus();
+                setEditing(blankDraft());
+              }}
               className="btn-orange mt-5 px-4 py-2 text-xs"
             >
               Add your first product
@@ -580,6 +665,7 @@ function AdminProducts() {
                       type="button"
                       onClick={() => {
                         setNotice(null);
+                        clearUploadStatus();
                         setEditing(toDraft(product));
                       }}
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -622,8 +708,9 @@ function AdminProducts() {
               </div>
               <button
                 type="button"
+                disabled={uploadingImages}
                 onClick={() => setEditing(null)}
-                className="btn-ghost-outline px-3 py-2 text-xs"
+                className="btn-ghost-outline px-3 py-2 text-xs disabled:opacity-50"
               >
                 Close
               </button>
@@ -634,6 +721,7 @@ function AdminProducts() {
               onSubmit={(event) => {
                 event.preventDefault();
                 setNotice(null);
+                if (uploadingImages) return;
                 save.mutate(editing);
               }}
             >
@@ -759,16 +847,45 @@ function AdminProducts() {
                 />
               </Field>
 
+              <Field label="Upload product images">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  multiple
+                  disabled={uploadingImages || save.isPending}
+                  onChange={(event) => {
+                    void uploadImages(event.currentTarget.files);
+                    event.currentTarget.value = "";
+                  }}
+                  className="field-tnt"
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  JPEG, PNG, WebP, or AVIF; up to 10 MB each. Files upload immediately to the public
+                  product-images bucket. If you cancel, uploaded files remain in Storage but are not
+                  attached to a product until saved.
+                </span>
+              </Field>
+              {uploadError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {uploadError}
+                </p>
+              )}
+              {uploadNotice && (
+                <p role="status" className="text-sm text-emerald-400">
+                  {uploadNotice}
+                </p>
+              )}
+
               <Field label="Product image URLs">
                 <textarea
                   rows={3}
                   className="field-tnt"
-                  placeholder="Paste one public image URL per line (https://…)"
+                  placeholder="Uploaded URLs appear here; you can also paste one public URL per line."
                   value={editing.image_urls}
                   onChange={(event) => setField("image_urls", event.target.value)}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  Images are stored as URLs in the existing product_images table.
+                  Save the product to store these URLs in the existing product_images table.
                 </span>
               </Field>
 
@@ -812,17 +929,22 @@ function AdminProducts() {
               <div className="flex justify-end gap-2 border-t border-border pt-4">
                 <button
                   type="button"
+                  disabled={uploadingImages}
                   onClick={() => setEditing(null)}
-                  className="btn-ghost-outline px-4 py-2 text-xs"
+                  className="btn-ghost-outline px-4 py-2 text-xs disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={save.isPending}
+                  disabled={save.isPending || uploadingImages}
                   className="btn-orange px-5 py-2 text-xs"
                 >
-                  {save.isPending ? "Saving…" : "Save product"}
+                  {uploadingImages
+                    ? "Uploading images…"
+                    : save.isPending
+                      ? "Saving…"
+                      : "Save product"}
                 </button>
               </div>
             </form>
