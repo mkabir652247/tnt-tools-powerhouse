@@ -82,12 +82,16 @@ export function ProductCard({
           {product.name}
         </Link>
         <p className="line-clamp-2 text-sm text-muted-foreground">{product.spec}</p>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Stars rating={product.rating} />
-          <span>
-            {product.rating.toFixed(1)} ({product.reviewCount})
-          </span>
-        </div>
+        {product.reviewCount > 0 ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Stars rating={product.rating} />
+            <span>
+              {product.rating.toFixed(1)} ({product.reviewCount})
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">New · No reviews yet</span>
+        )}
         <div className="mt-auto flex items-baseline gap-2 pt-2">
           <span className="font-display text-lg font-extrabold text-primary">
             {formatPrice(product.price)}

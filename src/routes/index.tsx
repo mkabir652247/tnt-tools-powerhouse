@@ -15,10 +15,11 @@ import {
 import heroImage from "@/assets/tnt-hero-promo.jpeg.asset.json";
 import workshopImage from "@/assets/workshop.jpg";
 import promoImage from "@/assets/product-angle-grinder.jpg";
-import { categories, products, type Product } from "@/data/products";
+import { type Product } from "@/data/products";
 import { ProductCard } from "@/components/site/ProductCard";
 import { QuickView } from "@/components/site/QuickView";
 import { Stars } from "@/components/site/Stars";
+import { useShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,8 +33,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "TNT Tools — Power Your Work. Built to Perform." },
       {
         property: "og:description",
-        content:
-          "Professional power tools, water pumps and reliable equipment for every job.",
+        content: "Professional power tools, water pumps and reliable equipment for every job.",
       },
     ],
   }),
@@ -109,8 +109,19 @@ const REVIEWS = [
 
 function Home() {
   const [quick, setQuick] = useState<Product | null>(null);
+  const {
+    catalogCategories: categories,
+    catalogProducts: products,
+    catalogLoading,
+    catalogError,
+  } = useShop();
   const featured = products.slice(0, 8);
   const bestSellers = products.filter((p) => p.badges.length > 0).slice(0, 4);
+  const emptyCatalogMessage = catalogError
+    ? "The live product catalog is unavailable. Please try again later."
+    : catalogLoading
+      ? "Loading products…"
+      : "No products have been added yet. Please check back soon.";
 
   return (
     <div>
@@ -212,9 +223,16 @@ function Home() {
             action={{ to: "/shop", label: "View all products" }}
           />
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {featured.map((p) => (
-              <ProductCard key={p.id} product={p} onQuickView={setQuick} />
-            ))}
+            {featured.length > 0 ? (
+              featured.map((p) => <ProductCard key={p.id} product={p} onQuickView={setQuick} />)
+            ) : (
+              <p
+                role={catalogError ? "alert" : "status"}
+                className="col-span-full text-center text-sm text-muted-foreground"
+              >
+                {emptyCatalogMessage}
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -268,18 +286,20 @@ function Home() {
       </section>
 
       {/* BEST SELLERS */}
-      <section className="container-tnt py-16">
-        <SectionHead
-          eyebrow="Best Sellers"
-          title="What the Pros Keep Buying"
-          action={{ to: "/shop", label: "See the shop" }}
-        />
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {bestSellers.map((p) => (
-            <ProductCard key={p.id} product={p} onQuickView={setQuick} />
-          ))}
-        </div>
-      </section>
+      {bestSellers.length > 0 && (
+        <section className="container-tnt py-16">
+          <SectionHead
+            eyebrow="Best Sellers"
+            title="What the Pros Keep Buying"
+            action={{ to: "/shop", label: "See the shop" }}
+          />
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {bestSellers.map((p) => (
+              <ProductCard key={p.id} product={p} onQuickView={setQuick} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ABOUT */}
       <section className="border-y border-border bg-surface/40 py-16">

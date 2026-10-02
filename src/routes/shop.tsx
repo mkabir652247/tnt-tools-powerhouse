@@ -1,18 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
-import {
-  brands,
-  categories,
-  discountPercent,
-  formatPrice,
-  maxPrice,
-  productTypes,
-  products,
-  type Product,
-} from "@/data/products";
+import { discountPercent, formatPrice, type Product } from "@/data/products";
 import { ProductCard } from "@/components/site/ProductCard";
 import { QuickView } from "@/components/site/QuickView";
+import { useShop } from "@/lib/shop-store";
 
 type ShopSearch = {
   q?: string | undefined;
@@ -67,8 +59,26 @@ function Shop() {
   const navigate = Route.useNavigate();
   const [quick, setQuick] = useState<Product | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const {
+    catalogProducts: products,
+    catalogCategories: categories,
+    catalogLoading,
+    catalogError,
+  } = useShop();
+  const brands = useMemo(
+    () => [...new Set(products.map((product) => product.brand))].sort(),
+    [products],
+  );
+  const productTypes = useMemo(
+    () => [...new Set(products.map((product) => product.type))].sort(),
+    [products],
+  );
+  const maxPrice = useMemo(
+    () => Math.max(5000, ...products.map((product) => product.price)),
+    [products],
+  );
 
-  const priceCap = search.max ?? maxPrice;
+  const priceCap = Math.min(search.max ?? maxPrice, maxPrice);
 
   const update = (patch: Partial<ShopSearch>) =>
     navigate({ search: (prev) => ({ ...prev, ...patch }) });
@@ -104,7 +114,7 @@ function Shop() {
         break;
     }
     return list;
-  }, [search, priceCap]);
+  }, [search, priceCap, products]);
 
   const activeCategory = categories.find((c) => c.slug === search.category);
 
@@ -239,12 +249,19 @@ function Shop() {
           Home
         </Link>{" "}
         / <span className="text-foreground">Shop</span>
-        {activeCategory && <> / <span className="text-primary">{activeCategory.name}</span></>}
+        {activeCategory && (
+          <>
+            {" "}
+            / <span className="text-primary">{activeCategory.name}</span>
+          </>
+        )}
       </nav>
 
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
         <div className="min-w-0">
-          <h1 className="text-3xl sm:text-4xl">{activeCategory ? activeCategory.name : "All Tools"}</h1>
+          <h1 className="text-3xl sm:text-4xl">
+            {activeCategory ? activeCategory.name : "All Tools"}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {filtered.length} product{filtered.length === 1 ? "" : "s"} available
           </p>
@@ -289,8 +306,17 @@ function Shop() {
           </div>
 
           {filtered.length === 0 ? (
-            <p className="mt-16 text-center text-muted-foreground">
-              No products match these filters. Try widening your search.
+            <p
+              role={catalogError && products.length === 0 ? "alert" : "status"}
+              className="mt-16 text-center text-muted-foreground"
+            >
+              {catalogError && products.length === 0
+                ? "The live catalog is unavailable. Please try again later."
+                : catalogLoading && products.length === 0
+                  ? "Loading products…"
+                  : products.length === 0
+                    ? "No products have been added yet. Please check back soon."
+                    : "No products match these filters. Try widening your search."}
             </p>
           ) : (
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -304,7 +330,10 @@ function Shop() {
 
       {filtersOpen && (
         <div className="fixed inset-0 z-[65] lg:hidden">
-          <div className="absolute inset-0 bg-background/85" onClick={() => setFiltersOpen(false)} />
+          <div
+            className="absolute inset-0 bg-background/85"
+            onClick={() => setFiltersOpen(false)}
+          />
           <div className="absolute left-0 top-0 h-full w-[85%] max-w-sm overflow-y-auto border-r border-border bg-surface p-5">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-display text-lg font-extrabold uppercase">Filters</h2>

@@ -1,17 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
-import { categories } from "@/data/products";
+import { useShop } from "@/lib/shop-store";
 import { Logo } from "./Logo";
 
 export function Footer() {
+  const { catalogCategories: categories } = useShop();
+
   return (
     <footer className="border-t border-border bg-surface">
       <div className="container-tnt grid gap-10 py-14 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
           <p className="mt-4 text-sm text-muted-foreground">
-            TNT Tools supplies professional-grade power tools, water pumps and workshop equipment
-            to contractors, technicians and serious DIY users.
+            TNT Tools supplies professional-grade power tools, water pumps and workshop equipment to
+            contractors, technicians and serious DIY users.
           </p>
           <div className="mt-5 flex gap-2">
             {[Facebook, Instagram, Youtube, Linkedin].map((Icon, i) => (
@@ -53,6 +55,11 @@ export function Footer() {
             <li>
               <Link to="/account" className="hover:text-primary">
                 My Account
+              </Link>
+            </li>
+            <li>
+              <Link to="/auth" className="hover:text-primary">
+                Staff sign in
               </Link>
             </li>
           </ul>

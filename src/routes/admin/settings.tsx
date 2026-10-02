@@ -29,7 +29,6 @@ function AdminSettings() {
     setBusy(true);
     const { error } = await supabase.auth.updateUser({
       password,
-      // @ts-expect-error current_password is accepted by the auth API
       current_password: currentPassword,
     });
     setBusy(false);
@@ -97,7 +96,9 @@ function AdminSettings() {
             />
           </label>
           {status && (
-            <p className={`text-sm ${status.ok ? "text-emerald-400" : "text-destructive"}`}>{status.text}</p>
+            <p className={`text-sm ${status.ok ? "text-emerald-400" : "text-destructive"}`}>
+              {status.text}
+            </p>
           )}
           <button type="submit" disabled={busy} className="btn-orange px-4 py-2 text-xs">
             {busy ? "Updating…" : "Update password"}

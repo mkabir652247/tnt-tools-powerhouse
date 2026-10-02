@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { products, type Product } from "@/data/products";
+import { type Product } from "@/data/products";
 import { ProductCard } from "@/components/site/ProductCard";
 import { QuickView } from "@/components/site/QuickView";
 import { useShop } from "@/lib/shop-store";
@@ -18,9 +18,9 @@ export const Route = createFileRoute("/wishlist")({
 });
 
 function WishlistPage() {
-  const { wishlist } = useShop();
+  const { wishlist, catalogProducts } = useShop();
   const [quick, setQuick] = useState<Product | null>(null);
-  const items = products.filter((p) => wishlist.includes(p.id));
+  const items = catalogProducts.filter((p) => wishlist.includes(p.id));
 
   return (
     <div className="container-tnt py-12">

@@ -8,18 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  Boxes,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Package,
-  Receipt,
-  Settings,
-  Tags,
-  Users,
-  X,
-} from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, Package, Settings, Tags, Users, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/site/Logo";
 
@@ -51,8 +40,6 @@ const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/products", label: "Products", icon: Package, exact: false },
   { to: "/admin/categories", label: "Categories", icon: Tags, exact: false },
-  { to: "/admin/inventory", label: "Inventory", icon: Boxes, exact: false },
-  { to: "/admin/orders", label: "Orders", icon: Receipt, exact: false },
   { to: "/admin/customers", label: "Customers", icon: Users, exact: false },
   { to: "/admin/settings", label: "Settings", icon: Settings, exact: false },
 ] as const;

@@ -19,15 +19,20 @@ type Metrics = {
 };
 
 async function loadDashboard() {
-  const [{ data: products, error: pErr }, { data: orders, error: oErr }, { data: items, error: iErr }] =
-    await Promise.all([
-      supabase.from("products").select("id, name, stock_quantity, low_stock_threshold, is_active"),
-      supabase
-        .from("orders")
-        .select("id, order_number, customer_name, total_amount, order_status, payment_status, created_at")
-        .order("created_at", { ascending: false }),
-      supabase.from("order_items").select("product_name_snapshot, quantity, total_price"),
-    ]);
+  const [
+    { data: products, error: pErr },
+    { data: orders, error: oErr },
+    { data: items, error: iErr },
+  ] = await Promise.all([
+    supabase.from("products").select("id, name, stock_quantity, low_stock_threshold, is_active"),
+    supabase
+      .from("orders")
+      .select(
+        "id, order_number, customer_name, total_amount, order_status, payment_status, created_at",
+      )
+      .order("created_at", { ascending: false }),
+    supabase.from("order_items").select("product_name_snapshot, quantity, total_price"),
+  ]);
   if (pErr) throw pErr;
   if (oErr) throw oErr;
   if (iErr) throw iErr;
@@ -81,7 +86,9 @@ function AdminDashboard() {
   if (error) {
     return (
       <div className="rounded-sm border border-destructive/40 bg-destructive/10 p-4">
-        <p className="text-sm text-destructive">Couldn't load the dashboard: {(error as Error).message}</p>
+        <p className="text-sm text-destructive">
+          Couldn't load the dashboard: {(error as Error).message}
+        </p>
         <button onClick={() => refetch()} className="btn-orange mt-3 px-4 py-2 text-xs">
           Try again
         </button>
@@ -120,9 +127,11 @@ function AdminDashboard() {
       <div className="grid gap-6 xl:grid-cols-3">
         <section className="rounded-sm border border-border bg-surface xl:col-span-2">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="font-display text-sm font-bold uppercase tracking-wide">Recent orders</h2>
-            <Link to="/admin/orders" className="text-xs text-primary hover:underline">
-              View all
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide">
+              Recent orders
+            </h2>
+            <Link to="/admin/products" className="text-xs text-primary hover:underline">
+              Manage products
             </Link>
           </div>
           {data!.recentOrders.length === 0 ? (
@@ -142,14 +151,12 @@ function AdminDashboard() {
                 <tbody>
                   {data!.recentOrders.map((o) => (
                     <tr key={o.id} className="border-t border-border">
-                      <td className="px-4 py-2 font-semibold">
-                        <Link to="/admin/orders" search={{ q: o.order_number }} className="hover:text-primary">
-                          {o.order_number}
-                        </Link>
-                      </td>
+                      <td className="px-4 py-2 font-semibold">{o.order_number}</td>
                       <td className="px-4 py-2">{o.customer_name}</td>
                       <td className="px-4 py-2">
-                        <span className={`rounded-sm border px-2 py-0.5 text-xs capitalize ${statusClass(o.order_status)}`}>
+                        <span
+                          className={`rounded-sm border px-2 py-0.5 text-xs capitalize ${statusClass(o.order_status)}`}
+                        >
                           {o.order_status}
                         </span>
                       </td>
@@ -174,7 +181,10 @@ function AdminDashboard() {
           ) : (
             <ul className="divide-y divide-border">
               {data!.topProducts.map((p) => (
-                <li key={p.name} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <li
+                  key={p.name}
+                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                >
                   <span className="min-w-0 truncate">{p.name}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {p.qty} sold · {money(p.revenue)}

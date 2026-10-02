@@ -1,16 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Heart, MapPin, Package, User } from "lucide-react";
-import { formatPrice, products } from "@/data/products";
+import { formatPrice } from "@/data/products";
 import { useShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
     meta: [
       { title: "My Account — TNT Tools" },
-      { name: "description", content: "View your TNT Tools orders, saved tools, addresses and profile details." },
+      {
+        name: "description",
+        content: "View your TNT Tools orders, saved tools, addresses and profile details.",
+      },
       { property: "og:title", content: "My Account — TNT Tools" },
-      { property: "og:description", content: "Orders, wishlist, addresses and profile in one place." },
+      {
+        property: "og:description",
+        content: "Orders, wishlist, addresses and profile in one place.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -32,8 +38,8 @@ const SAMPLE_ORDERS = [
 
 function Account() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("orders");
-  const { wishlist, lastOrder } = useShop();
-  const saved = products.filter((p) => wishlist.includes(p.id));
+  const { wishlist, lastOrder, catalogProducts } = useShop();
+  const saved = catalogProducts.filter((p) => wishlist.includes(p.id));
 
   return (
     <div className="container-tnt py-12">
@@ -213,7 +219,13 @@ function Field({
       <label htmlFor={id} className="mb-1.5 block text-sm font-semibold">
         {label}
       </label>
-      <input id={id} type={type} defaultValue={defaultValue} maxLength={120} className="field-tnt text-sm" />
+      <input
+        id={id}
+        type={type}
+        defaultValue={defaultValue}
+        maxLength={120}
+        className="field-tnt text-sm"
+      />
     </div>
   );
 }

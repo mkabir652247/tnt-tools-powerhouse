@@ -1,0 +1,21 @@
+{
+  "routes": [
+    { "path": "/", "title": "Home" },
+    { "path": "/about", "title": "About TNT Tools" },
+    { "path": "/account", "title": "My Account" },
+    { "path": "/admin", "title": "Admin Dashboard" },
+    { "path": "/admin/categories", "title": "Admin Categories" },
+    { "path": "/admin/customers", "title": "Admin Customers" },
+    { "path": "/admin/products", "title": "Admin Products" },
+    { "path": "/admin/settings", "title": "Admin Settings" },
+    { "path": "/auth", "title": "Staff Sign In" },
+    { "path": "/cart", "title": "Shopping Cart" },
+    { "path": "/categories", "title": "Tool Categories" },
+    { "path": "/checkout", "title": "Checkout" },
+    { "path": "/contact", "title": "Contact" },
+    { "path": "/order-confirmation", "title": "Order Confirmation" },
+    { "path": "/product/:slug", "title": "Product Details" },
+    { "path": "/shop", "title": "Shop" },
+    { "path": "/wishlist", "title": "Wishlist" }
+  ]
+}

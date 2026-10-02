@@ -35,12 +35,16 @@ export function QuickView({ product, onClose }: { product: Product | null; onClo
         />
         <div className="flex flex-col gap-3">
           <h3 className="pr-10 font-display text-xl font-extrabold">{product.name}</h3>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Stars rating={product.rating} />
-            <span>
-              {product.rating.toFixed(1)} · {product.reviewCount} reviews
-            </span>
-          </div>
+          {product.reviewCount > 0 ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Stars rating={product.rating} />
+              <span>
+                {product.rating.toFixed(1)} · {product.reviewCount} reviews
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">No reviews yet</span>
+          )}
           <p className="text-sm text-muted-foreground">{product.description}</p>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-2xl font-extrabold text-primary">

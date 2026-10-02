@@ -1,37 +1,33 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Check, Heart, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
-import {
-  discountPercent,
-  formatPrice,
-  getProductBySlug,
-  getRelated,
-  type Product,
-} from "@/data/products";
+import { discountPercent, formatPrice, type Product } from "@/data/products";
 import { ProductCard } from "@/components/site/ProductCard";
 import { QuickView } from "@/components/site/QuickView";
 import { Stars } from "@/components/site/Stars";
 import { useShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/product/$slug")({
-  loader: ({ params }) => {
-    const product = getProductBySlug(params.slug);
-    if (!product) throw notFound();
-    return { product };
-  },
+  loader: ({ params }) => ({ slug: params.slug }),
   head: ({ loaderData }) => {
-    if (!loaderData) {
-      return {
-        meta: [{ title: "Product unavailable — TNT Tools" }, { name: "robots", content: "noindex" }],
-      };
-    }
-    const { product } = loaderData;
+    const productName = loaderData?.slug
+      .split("-")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+    const title = `${productName || "Product"} — TNT Tools`;
     return {
       meta: [
-        { title: `${product.name} — TNT Tools` },
-        { name: "description", content: product.description.slice(0, 155) },
-        { property: "og:title", content: `${product.name} — TNT Tools` },
-        { property: "og:description", content: product.spec },
+        { title },
+        {
+          name: "description",
+          content: "View product pricing, availability, photos, and specifications from TNT Tools.",
+        },
+        { property: "og:title", content: title },
+        {
+          property: "og:description",
+          content: "Product details and specifications from TNT Tools.",
+        },
       ],
     };
   },
@@ -54,13 +50,56 @@ const REVIEWS = [
 ];
 
 function ProductPage() {
-  const { product } = Route.useLoaderData();
-  const { addToCart, toggleWishlist, isWishlisted, setCartOpen } = useShop();
+  const { slug } = Route.useParams();
+  const {
+    catalogProducts,
+    catalogLoading,
+    catalogError,
+    addToCart,
+    toggleWishlist,
+    isWishlisted,
+    setCartOpen,
+  } = useShop();
+  const product = catalogProducts.find((item) => item.slug === slug);
   const [active, setActive] = useState(0);
   const [qty, setQty] = useState(1);
   const [quick, setQuick] = useState<Product | null>(null);
+
+  if (!product) {
+    return (
+      <div className="container-tnt py-24 text-center">
+        <h1 className="text-3xl">
+          {catalogLoading
+            ? "Loading product…"
+            : catalogError
+              ? "Catalog unavailable"
+              : "Product not found"}
+        </h1>
+        <p className="mt-3 text-muted-foreground">
+          {catalogLoading
+            ? "Fetching the latest catalogue."
+            : catalogError
+              ? "The live catalog could not be loaded. Please try again later."
+              : "This tool may have been renamed or retired."}
+        </p>
+        {!catalogLoading && !catalogError && (
+          <Link to="/shop" className="btn-orange mt-6">
+            Back to Shop
+          </Link>
+        )}
+      </div>
+    );
+  }
+
   const discount = discountPercent(product);
-  const related = getRelated(product);
+  const related = [
+    ...catalogProducts.filter(
+      (item) => item.id !== product.id && item.category === product.category,
+    ),
+    ...catalogProducts.filter(
+      (item) => item.id !== product.id && item.category !== product.category,
+    ),
+  ].slice(0, 4);
 
   return (
     <div className="container-tnt py-10">
@@ -113,10 +152,16 @@ function ProductPage() {
         <div>
           <h1 className="text-3xl sm:text-4xl">{product.name}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <Stars rating={product.rating} />
-            <span>
-              {product.rating.toFixed(1)} · {product.reviewCount} reviews
-            </span>
+            {product.reviewCount > 0 ? (
+              <>
+                <Stars rating={product.rating} />
+                <span>
+                  {product.rating.toFixed(1)} · {product.reviewCount} reviews
+                </span>
+              </>
+            ) : (
+              <span>No reviews yet</span>
+            )}
             <span className="text-border">|</span>
             <span>{product.brand}</span>
           </div>
@@ -143,7 +188,8 @@ function ProductPage() {
             }`}
           >
             {product.inStock ? <Check width={16} height={16} /> : <X width={16} height={16} />}
-            {product.stockLabel ?? (product.inStock ? "In stock — ships in 24 hours" : "Out of stock")}
+            {product.stockLabel ??
+              (product.inStock ? "In stock — ships in 24 hours" : "Out of stock")}
           </p>
 
           <p className="mt-5 text-muted-foreground">{product.description}</p>
@@ -212,7 +258,9 @@ function ProductPage() {
           </div>
 
           <div className="mt-8">
-            <h2 className="font-display text-lg font-extrabold uppercase tracking-wide">Features</h2>
+            <h2 className="font-display text-lg font-extrabold uppercase tracking-wide">
+              Features
+            </h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               {product.features.map((f) => (
                 <li key={f} className="flex items-start gap-2">
@@ -244,22 +292,28 @@ function ProductPage() {
 
         <div>
           <h2 className="text-2xl">Customer Reviews</h2>
-          <ul className="mt-4 space-y-4">
-            {REVIEWS.map((r) => (
-              <li key={r.name} className="rounded-lg border border-border bg-surface p-5">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/15 font-display font-bold text-primary">
-                    {r.name.charAt(0)}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate font-display text-sm font-bold">{r.name}</p>
-                    <Stars rating={r.rating} size={12} />
+          {product.reviewCount === 0 ? (
+            <p className="mt-4 rounded-lg border border-border bg-surface p-5 text-sm text-muted-foreground">
+              No reviews yet. Check back after customers have tried this product.
+            </p>
+          ) : (
+            <ul className="mt-4 space-y-4">
+              {REVIEWS.map((r) => (
+                <li key={r.name} className="rounded-lg border border-border bg-surface p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/15 font-display font-bold text-primary">
+                      {r.name.charAt(0)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-display text-sm font-bold">{r.name}</p>
+                      <Stars rating={r.rating} size={12} />
+                    </div>
                   </div>
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">“{r.text}”</p>
-              </li>
-            ))}
-          </ul>
+                  <p className="mt-3 text-sm text-muted-foreground">“{r.text}”</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 

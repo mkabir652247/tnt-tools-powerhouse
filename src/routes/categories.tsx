@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { categories, products } from "@/data/products";
+import { useShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/categories")({
   head: () => ({
@@ -22,6 +22,8 @@ export const Route = createFileRoute("/categories")({
 });
 
 function Categories() {
+  const { catalogCategories: categories, catalogProducts: products } = useShop();
+
   return (
     <div className="container-tnt py-12">
       <p className="eyebrow">Shop by Category</p>
