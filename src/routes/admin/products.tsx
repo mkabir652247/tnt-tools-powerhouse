@@ -121,6 +121,7 @@ function parseImageUrls(value: string) {
     ),
   ];
   for (const value of urls) {
+    if (value.startsWith("/") && !value.startsWith("//")) continue; // built-in store photo
     let parsed: URL;
     try {
       parsed = new URL(value);
@@ -337,7 +338,7 @@ function AdminProducts() {
       if (!Number.isInteger(threshold) || threshold < 0)
         throw new Error("Low-stock threshold must be a whole number of 0 or more.");
 
-      const payload = {
+      const basePayload = {
         name,
         slug,
         description: draft.description.trim() || null,
@@ -347,16 +348,39 @@ function AdminProducts() {
         sku: draft.sku.trim() || null,
         price,
         compare_at_price: compareAt,
-        stock_quantity: stock,
         low_stock_threshold: threshold,
         is_featured: draft.is_featured,
         is_active: draft.is_active,
       };
 
+      // Stock changes always go through the database stock function so every change is logged.
       const result = draft.id
-        ? await supabase.from("products").update(payload).eq("id", draft.id).select("id").single()
-        : await supabase.from("products").insert(payload).select("id").single();
-      if (result.error) throw result.error;
+        ? await supabase.from("products").update(basePayload).eq("id", draft.id).select("id, stock_quantity").single()
+        : await supabase
+            .from("products")
+            .insert({ ...basePayload, stock_quantity: 0 })
+            .select("id, stock_quantity")
+            .single();
+      if (result.error) {
+        if (result.error.code === "23505") {
+          throw new Error(
+            result.error.message.includes("sku")
+              ? "Another product already uses this SKU."
+              : "Another product already uses this web address (slug).",
+          );
+        }
+        throw result.error;
+      }
+      const delta = stock - result.data.stock_quantity;
+      if (delta !== 0) {
+        const { error: stockError } = await supabase.rpc("admin_adjust_stock", {
+          _product_id: result.data.id,
+          _change: delta,
+          _type: draft.id ? "adjustment" : "purchase",
+          _note: draft.id ? "Edited in product form" : "Opening stock",
+        });
+        if (stockError) throw stockError;
+      }
 
       try {
         await saveProductDetails(result.data.id, {
@@ -476,9 +500,14 @@ function AdminProducts() {
         });
         if (error) throw error;
 
-        const { data: publicData } = storage.getPublicUrl(uploaded.path);
-        uploadedUrls.push(publicData.publicUrl);
-        appendImageUrls([publicData.publicUrl]);
+        // Bucket is private (workspace blocks public buckets) — use a long-lived signed link.
+        const { data: signed, error: signError } = await storage.createSignedUrl(
+          uploaded.path,
+          60 * 60 * 24 * 365 * 10,
+        );
+        if (signError || !signed) throw signError ?? new Error("Couldn't create image link.");
+        uploadedUrls.push(signed.signedUrl);
+        appendImageUrls([signed.signedUrl]);
       }
       setUploadNotice(
         `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Save the product to attach them to the listing.`,
