@@ -30,7 +30,8 @@ function OrderConfirmation() {
         <CheckCircle2 width={48} height={48} className="mx-auto text-primary" />
         <h1 className="mt-5 text-3xl">Order Confirmed</h1>
         <p className="mt-3 text-muted-foreground">
-          Thank you — your tools are being prepared for dispatch. A confirmation email is on its way.
+          Thank you — your order has been received. We'll call you to confirm before dispatch. Pay in
+          cash when your tools arrive.
         </p>
 
         <dl className="mt-7 grid gap-3 rounded-sm border border-border p-5 text-left text-sm">
