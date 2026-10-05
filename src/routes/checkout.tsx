@@ -1,14 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Banknote, CreditCard, Wallet } from "lucide-react";
+import { Banknote } from "lucide-react";
 import { formatPrice } from "@/data/products";
 import { useShop } from "@/lib/shop-store";
+import { placeOrder } from "@/lib/orders.functions";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
     meta: [
       { title: "Checkout — TNT Tools" },
-      { name: "description", content: "Complete your TNT Tools order: shipping, discount code and payment method." },
+      { name: "description", content: "Complete your TNT Tools order with Cash on Delivery." },
       { property: "og:title", content: "Checkout — TNT Tools" },
       { property: "og:description", content: "Secure checkout for professional power tools and equipment." },
       { name: "robots", content: "noindex" },
@@ -20,16 +23,20 @@ export const Route = createFileRoute("/checkout")({
 const COUPONS: Record<string, number> = { TNT10: 0.1, POWER15: 0.15 };
 
 function Checkout() {
-  const { detailedCart, subtotal, placeOrder } = useShop();
+  const { detailedCart, subtotal, clearCart } = useShop();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const submitOrder = useServerFn(placeOrder);
   const [coupon, setCoupon] = useState("");
   const [applied, setApplied] = useState<{ code: string; rate: number } | null>(null);
   const [couponError, setCouponError] = useState("");
-  const [payment, setPayment] = useState("card");
+  const [submitting, setSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const shipping = subtotal > 0 && subtotal < 25000 ? 750 : 0;
   const discount = applied ? Math.round(subtotal * applied.rate) : 0;
   const total = Math.max(0, subtotal - discount) + shipping;
+  const unavailable = detailedCart.filter(({ product }) => !product.inStock);
 
   function applyCoupon() {
     const rate = COUPONS[coupon.trim().toUpperCase()];
@@ -42,11 +49,51 @@ function Checkout() {
     setCouponError("");
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (detailedCart.length === 0) return;
-    const id = placeOrder(total);
-    navigate({ to: "/order-confirmation", search: { order: id, total } });
+    if (detailedCart.length === 0 || submitting) return;
+    if (unavailable.length > 0) {
+      setOrderError(`Remove out-of-stock items first: ${unavailable.map((l) => l.product.name).join(", ")}`);
+      return;
+    }
+    const form = new FormData(e.currentTarget);
+    const get = (k: string) => String(form.get(k) ?? "");
+    setSubmitting(true);
+    setOrderError(null);
+    try {
+      const address = [get("address"), get("postal")].filter(Boolean).join(", ");
+      const res = await submitOrder({
+        data: {
+          customer_name: get("name"),
+          customer_phone: get("phone"),
+          customer_email: get("email"),
+          shipping_address: address,
+          city: get("city"),
+          notes: get("notes"),
+          ...(applied ? { coupon: applied.code } : {}),
+          items: detailedCart.map(({ product, qty }) => ({ product_id: product.id, quantity: qty })),
+        },
+      });
+      if (!res.ok) {
+        setOrderError(res.error);
+        await queryClient.invalidateQueries({ queryKey: ["storefront", "catalog"] });
+        return;
+      }
+      clearCart();
+      await queryClient.invalidateQueries({ queryKey: ["storefront", "catalog"] });
+      navigate({ to: "/order-confirmation", search: { order: res.orderNumber, total: res.total } });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      // Validation errors come back as a JSON list from the server.
+      try {
+        const parsed = JSON.parse(msg) as { message: string }[];
+        setOrderError(parsed.map((p) => p.message).join(". "));
+      } catch {
+        setOrderError("We couldn't place your order. Check your connection and try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (detailedCart.length === 0) {
@@ -74,13 +121,13 @@ function Checkout() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Input label="Full name" name="name" required />
               <Input label="Phone" name="phone" type="tel" required />
-              <Input label="Email" name="email" type="email" required />
+              <Input label="Email (optional)" name="email" type="email" />
               <Input label="City" name="city" required />
               <div className="sm:col-span-2">
                 <Input label="Street address" name="address" required />
               </div>
               <Input label="Postal code" name="postal" />
-              <Input label="Company (optional)" name="company" />
+              <Input label="Order notes (optional)" name="notes" />
             </div>
           </section>
 
@@ -88,40 +135,13 @@ function Checkout() {
             <h2 className="font-display text-lg font-extrabold uppercase tracking-wide">
               Payment Method
             </h2>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {[
-                { id: "card", label: "Card", icon: CreditCard },
-                { id: "cod", label: "Cash on Delivery", icon: Banknote },
-                { id: "wallet", label: "Mobile Wallet", icon: Wallet },
-              ].map(({ id, label, icon: Icon }) => (
-                <label
-                  key={id}
-                  className={`flex cursor-pointer items-center gap-3 rounded-sm border p-4 transition-colors ${
-                    payment === id ? "border-primary bg-primary/10" : "border-border hover:border-primary/60"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value={id}
-                    checked={payment === id}
-                    onChange={() => setPayment(id)}
-                    className="sr-only"
-                  />
-                  <Icon width={18} height={18} className="shrink-0 text-primary" />
-                  <span className="min-w-0 truncate text-sm font-semibold">{label}</span>
-                </label>
-              ))}
-            </div>
-            {payment === "card" && (
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Input label="Card number" name="card" placeholder="0000 0000 0000 0000" />
-                </div>
-                <Input label="Expiry" name="expiry" placeholder="MM/YY" />
-                <Input label="CVC" name="cvc" placeholder="123" />
+            <div className="mt-5 flex items-center gap-3 rounded-sm border border-primary bg-primary/10 p-4">
+              <Banknote width={18} height={18} className="shrink-0 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">Cash on Delivery</p>
+                <p className="text-xs text-muted-foreground">Pay in cash when your order arrives.</p>
               </div>
-            )}
+            </div>
           </section>
         </div>
 
@@ -134,6 +154,7 @@ function Checkout() {
               <li key={product.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
                 <span className="min-w-0 truncate text-muted-foreground">
                   {product.name} × {qty}
+                  {!product.inStock && <span className="ml-1 text-destructive">(out of stock)</span>}
                 </span>
                 <span className="shrink-0">{formatPrice(product.price * qty)}</span>
               </li>
@@ -185,12 +206,15 @@ function Checkout() {
             </div>
           </dl>
 
-          <button type="submit" className="btn-orange mt-6 w-full text-sm">
-            Place Order
+          {orderError && (
+            <p role="alert" className="mt-4 rounded-sm border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {orderError}
+            </p>
+          )}
+
+          <button type="submit" disabled={submitting} className="btn-orange mt-6 w-full text-sm disabled:opacity-60">
+            {submitting ? "Placing order…" : "Place Order (Cash on Delivery)"}
           </button>
-          <p className="mt-3 text-xs text-muted-foreground">
-            This is a demo checkout — no payment is processed and no card details are stored.
-          </p>
         </aside>
       </form>
     </div>

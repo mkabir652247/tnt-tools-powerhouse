@@ -220,7 +220,7 @@ function ProductPage() {
               onClick={() => addToCart(product.id, qty)}
               className="btn-orange flex-1 sm:flex-none"
             >
-              Add to Cart
+              {product.inStock ? "Add to Cart" : "Out of stock"}
             </button>
             <Link
               to="/checkout"
