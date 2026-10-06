@@ -5,7 +5,6 @@ import {
   createRootRouteWithContext,
   useRouter,
   useRouterState,
-  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
