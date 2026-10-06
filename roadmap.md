@@ -17,8 +17,12 @@
 
 ## Backend (Supabase) build
 - [x] Stage 1: database foundation (categories, products, images, specs, inventory movements, orders, order items, roles, RLS)
-- [ ] Stage 2: admin auth + role assignment, /admin gate
-- [ ] Stage 3: admin dashboard
-- [ ] Stage 4: product + inventory management
-- [ ] Stage 5: order management
-- [ ] Stage 6: storefront integration, image storage, testing
+- [x] Stage 2: admin auth + role assignment, /admin gate
+- [x] Stage 3: admin dashboard
+- [x] Stage 4: product + inventory management
+- [x] Stage 5: order management
+- [x] Stage 6: storefront integration, image storage, testing
+
+## Open
+- [ ] Delete test products/orders (awaiting user approval)
+- [ ] Public image bucket (workspace setting) — currently private with long-lived links
