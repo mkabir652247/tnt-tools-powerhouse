@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   useRouter,
   useRouterState,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -125,26 +126,27 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const isAdminRoute = useRouterState({
-    select: (state) => state.location.pathname.startsWith("/admin"),
-  });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ShopProvider loadCatalog={!isAdminRoute}>
-        {isAdminRoute ? (
+      <ShopProvider loadCatalog={!isAdmin}>
+        {isAdmin ? (
           <Outlet />
         ) : (
-          <div className="flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1">
-              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-              <Outlet />
-            </main>
-            <Footer />
-          </div>
+          <>
+            <div className="flex min-h-screen flex-col">
+              <Header />
+              <main className="flex-1">
+                {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+                <Outlet />
+              </main>
+              <Footer />
+            </div>
+            <CartDrawer />
+          </>
         )}
-        {!isAdminRoute && <CartDrawer />}
       </ShopProvider>
     </QueryClientProvider>
   );
