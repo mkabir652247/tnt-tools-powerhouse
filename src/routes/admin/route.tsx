@@ -28,7 +28,7 @@ export const Route = createFileRoute("/admin")({
   errorComponent: ({ error }) => (
     <div className="container-tnt py-16 text-center">
       <h1 className="font-display text-xl font-bold uppercase">Admin panel didn't load</h1>
-      <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{error instanceof Error ? error.message : "Unknown error"}</p>
     </div>
   ),
   notFoundComponent: () => (

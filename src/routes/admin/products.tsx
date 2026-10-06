@@ -327,6 +327,8 @@ function AdminProducts() {
       const specifications = parseSpecifications(draft.specifications);
 
       if (!name) throw new Error("Product name is required.");
+      if (!draft.category_id) throw new Error("Choose a category.");
+      if (!draft.price.trim()) throw new Error("Selling price is required.");
       if (!slug) throw new Error("Add a product name that can be used to create a web address.");
       if (!Number.isFinite(price) || price < 0)
         throw new Error("Enter a valid non-negative price.");

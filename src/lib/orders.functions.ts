@@ -76,7 +76,10 @@ export const placeOrder = createServerFn({ method: "POST" })
       return { ok: false as const, error: "We couldn't place your order. Please try again." };
     }
 
-    const row = Array.isArray(result) ? result[0] : result;
+    const row = (Array.isArray(result) ? result[0] : result) as
+      | { order_number: string; total_amount: number }
+      | undefined;
+    if (!row) return { ok: false as const, error: "We couldn't place your order. Please try again." };
     return {
       ok: true as const,
       orderNumber: row.order_number as string,
