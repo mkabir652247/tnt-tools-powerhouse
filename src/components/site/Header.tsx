@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Heart, Menu, Search, ShoppingCart, User, X } from "lucide-react";
+import { Heart, Menu, Search, Shield, ShoppingCart, User, X } from "lucide-react";
 import { useState } from "react";
 import { useShop } from "@/lib/shop-store";
 import { Logo } from "./Logo";
@@ -96,6 +96,15 @@ export function Header() {
             <User width={19} height={19} />
           </Link>
 
+          <Link
+            to="/admin"
+            aria-label="Admin panel"
+            title="Admin panel"
+            className="grid h-10 w-10 place-items-center rounded-sm transition-colors hover:text-primary"
+          >
+            <Shield width={19} height={19} />
+          </Link>
+
           <Link to="/shop" className="btn-orange ml-2 hidden px-4 py-2 text-xs sm:inline-flex">
             Shop Now
           </Link>
@@ -147,6 +156,16 @@ export function Header() {
             <li className="py-3">
               <Link to="/shop" onClick={() => setMenuOpen(false)} className="btn-orange w-full text-sm">
                 Shop Now
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/admin"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 py-3 font-display text-sm font-bold uppercase tracking-wide"
+              >
+                <Shield width={16} height={16} />
+                Admin Panel
               </Link>
             </li>
           </ul>
