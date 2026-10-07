@@ -319,7 +319,7 @@ function Shop() {
                     : "No products match these filters. Try widening your search."}
             </p>
           ) : (
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
               {filtered.map((p) => (
                 <ProductCard key={p.id} product={p} onQuickView={setQuick} />
               ))}

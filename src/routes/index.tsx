@@ -222,7 +222,7 @@ function Home() {
             title="Tools That Earn Their Keep"
             action={{ to: "/shop", label: "View all products" }}
           />
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {featured.length > 0 ? (
               featured.map((p) => <ProductCard key={p.id} product={p} onQuickView={setQuick} />)
             ) : (
@@ -293,7 +293,7 @@ function Home() {
             title="What the Pros Keep Buying"
             action={{ to: "/shop", label: "See the shop" }}
           />
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {bestSellers.map((p) => (
               <ProductCard key={p.id} product={p} onQuickView={setQuick} />
             ))}
