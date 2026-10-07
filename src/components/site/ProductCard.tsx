@@ -73,15 +73,15 @@ export function ProductCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
+      <div className="flex flex-1 flex-col gap-2 p-2.5 sm:p-4">
         <Link
           to="/product/$slug"
           params={{ slug: product.slug }}
-          className="font-display text-base font-bold leading-snug transition-colors group-hover:text-primary"
+          className="line-clamp-2 font-display text-sm font-bold leading-snug transition-colors group-hover:text-primary sm:text-base"
         >
           {product.name}
         </Link>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{product.spec}</p>
+        <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm">{product.spec}</p>
         {product.reviewCount > 0 ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Stars rating={product.rating} />
@@ -93,7 +93,7 @@ export function ProductCard({
           <span className="text-xs text-muted-foreground">New · No reviews yet</span>
         )}
         <div className="mt-auto flex items-baseline gap-2 pt-2">
-          <span className="font-display text-lg font-extrabold text-primary">
+          <span className="font-display text-base font-extrabold text-primary sm:text-lg">
             {formatPrice(product.price)}
           </span>
           {product.oldPrice && (
@@ -106,7 +106,7 @@ export function ProductCard({
           type="button"
           disabled={!product.inStock}
           onClick={() => addToCart(product.id)}
-          className="btn-orange mt-2 w-full text-sm"
+          className="btn-orange mt-2 w-full px-2 py-2 text-xs sm:py-2.5 sm:text-sm"
         >
           <ShoppingCart width={16} height={16} />
           {product.inStock ? "Add to Cart" : "Unavailable"}
