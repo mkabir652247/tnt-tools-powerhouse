@@ -103,7 +103,7 @@ function CartPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Shipping</dt>
-                <dd>{shipping === 0 ? "Free" : formatPrice(shipping)}</dd>
+                <dd>{formatPrice(shipping)}</dd>
               </div>
               <div className="flex justify-between border-t border-border pt-3 font-display text-base font-extrabold">
                 <dt>Total</dt>
