@@ -1,9 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { SHIPPING_FEE } from "./shipping";
 
 const COUPONS: Record<string, number> = { TNT10: 0.1, POWER15: 0.15 };
-const FREE_SHIPPING_FROM = 25000;
-const SHIPPING_FEE = 750;
 
 const orderSchema = z.object({
   customer_name: z.string().trim().min(2, "Enter your full name").max(120),
@@ -51,7 +50,7 @@ export const placeOrder = createServerFn({ method: "POST" })
     );
     const rate = data.coupon ? (COUPONS[data.coupon.toUpperCase()] ?? 0) : 0;
     const discount = Math.round(subtotal * rate);
-    const shipping = subtotal > 0 && subtotal < FREE_SHIPPING_FROM ? SHIPPING_FEE : 0;
+    const shipping = SHIPPING_FEE;
 
     const { data: result, error } = await supabaseAdmin.rpc("place_order", {
       _order: {

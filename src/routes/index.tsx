@@ -31,6 +31,8 @@ export const Route = createFileRoute("/")({
           "Shop professional power tools, water pumps, grinders, welding machines and workshop equipment at TNT Tools. Reliable quality at competitive prices.",
       },
       { property: "og:title", content: "TNT Tools — Power Your Work. Built to Perform." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       {
         property: "og:description",
         content: "Professional power tools, water pumps and reliable equipment for every job.",
@@ -182,13 +184,13 @@ function Home() {
           title="Every Trade Covered"
           action={{ to: "/categories", label: "All categories" }}
         />
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           {categories.map((c) => (
             <Link
               key={c.slug}
               to="/shop"
               search={{ category: c.slug }}
-              className="card-tool group relative overflow-hidden"
+              className="card-tool group relative min-w-0 overflow-hidden"
             >
               <div className="aspect-[16/10] overflow-hidden">
                 <img
@@ -200,11 +202,11 @@ function Home() {
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
               </div>
-              <div className="p-4">
-                <h3 className="font-display text-lg font-extrabold transition-colors group-hover:text-primary">
+              <div className="p-3 sm:p-4">
+                <h3 className="min-h-10 break-words font-display text-sm font-extrabold leading-tight transition-colors group-hover:text-primary sm:min-h-0 sm:text-lg">
                   {c.name}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{c.description}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">{c.description}</p>
                 <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary">
                   Browse <ArrowRight width={14} height={14} />
                 </span>

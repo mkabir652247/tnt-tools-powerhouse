@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep the shipping charge in the browser-safe shipping module and use it in cart, checkout, and server order creation so displayed and saved totals agree.

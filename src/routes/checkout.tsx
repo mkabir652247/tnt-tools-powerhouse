@@ -6,6 +6,7 @@ import { Banknote } from "lucide-react";
 import { formatPrice } from "@/data/products";
 import { useShop } from "@/lib/shop-store";
 import { placeOrder } from "@/lib/orders.functions";
+import { SHIPPING_FEE } from "@/lib/shipping";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -33,7 +34,7 @@ function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
-  const shipping = subtotal > 0 && subtotal < 25000 ? 750 : 0;
+  const shipping = SHIPPING_FEE;
   const discount = applied ? Math.round(subtotal * applied.rate) : 0;
   const total = Math.max(0, subtotal - discount) + shipping;
   const unavailable = detailedCart.filter(({ product }) => !product.inStock);
