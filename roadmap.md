@@ -24,5 +24,7 @@
 - [x] Stage 6: storefront integration, image storage, testing
 
 ## Open
+- [x] Flat Rs 645 shipping shared across cart, checkout, and order creation; pricing test and checkout display verified.
+- [x] Two categories per mobile row on home and categories pages; verified at phone widths.
 - [ ] Delete test products/orders (awaiting user approval)
 - [ ] Public image bucket (workspace setting) — currently private with long-lived links

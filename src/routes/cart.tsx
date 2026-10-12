@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { formatPrice } from "@/data/products";
 import { useShop } from "@/lib/shop-store";
+import { SHIPPING_FEE } from "@/lib/shipping";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
   const { detailedCart, subtotal, setQty, removeFromCart } = useShop();
-  const shipping = subtotal > 0 && subtotal < 25000 ? 750 : 0;
+  const shipping = SHIPPING_FEE;
 
   return (
     <div className="container-tnt py-12">
@@ -102,7 +103,7 @@ function CartPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Shipping</dt>
-                <dd>{shipping === 0 ? "Free" : formatPrice(shipping)}</dd>
+                <dd>{formatPrice(shipping)}</dd>
               </div>
               <div className="flex justify-between border-t border-border pt-3 font-display text-base font-extrabold">
                 <dt>Total</dt>
