@@ -363,6 +363,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          must_change_password: boolean
           phone: string | null
           updated_at: string
         }
@@ -371,6 +372,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          must_change_password?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -379,6 +381,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          must_change_password?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -450,6 +453,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_password_changed: { Args: never; Returns: undefined }
+      must_change_password: { Args: never; Returns: boolean }
       place_order: {
         Args: { _items: Json; _order: Json }
         Returns: {
