@@ -16,6 +16,7 @@ import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CategoriesRouteImport } from './routes/categories'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as OrderConfirmationRouteImport } from './routes/order-confirmation'
@@ -63,6 +64,11 @@ const CartRoute = CartRouteImport.update({
 const CategoriesRoute = CategoriesRouteImport.update({
   id: '/categories',
   path: '/categories',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutRoute = CheckoutRouteImport.update({
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/categories': typeof CategoriesRoute
+  '/change-password': typeof ChangePasswordRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/order-confirmation': typeof OrderConfirmationRoute
@@ -160,6 +167,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/categories': typeof CategoriesRoute
+  '/change-password': typeof ChangePasswordRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/order-confirmation': typeof OrderConfirmationRoute
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/categories': typeof CategoriesRoute
+  '/change-password': typeof ChangePasswordRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/order-confirmation': typeof OrderConfirmationRoute
@@ -207,6 +216,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/categories'
+    | '/change-password'
     | '/checkout'
     | '/contact'
     | '/order-confirmation'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/categories'
+    | '/change-password'
     | '/checkout'
     | '/contact'
     | '/order-confirmation'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/categories'
+    | '/change-password'
     | '/checkout'
     | '/contact'
     | '/order-confirmation'
@@ -273,6 +285,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   CartRoute: typeof CartRoute
   CategoriesRoute: typeof CategoriesRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
   CheckoutRoute: typeof CheckoutRoute
   ContactRoute: typeof ContactRoute
   OrderConfirmationRoute: typeof OrderConfirmationRoute
@@ -330,6 +343,13 @@ declare module '@tanstack/react-router' {
       path: '/categories'
       fullPath: '/categories'
       preLoaderRoute: typeof CategoriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout': {
@@ -458,6 +478,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   CartRoute: CartRoute,
   CategoriesRoute: CategoriesRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
   CheckoutRoute: CheckoutRoute,
   ContactRoute: ContactRoute,
   OrderConfirmationRoute: OrderConfirmationRoute,
