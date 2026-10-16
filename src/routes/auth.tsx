@@ -5,6 +5,9 @@ import { Logo } from "@/components/site/Logo";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (s: Record<string, unknown>): { changed?: string | undefined } => ({
+    changed: typeof s["changed"] === "string" ? s["changed"] : undefined,
+  }),
   component: AuthPage,
   head: () => ({
     meta: [
@@ -17,8 +20,15 @@ export const Route = createFileRoute("/auth")({
   }),
 });
 
+async function goAfterSignIn(navigate: ReturnType<typeof useNavigate>) {
+  const { data } = await supabase.rpc("must_change_password");
+  if (data !== false) navigate({ to: "/change-password", replace: true });
+  else navigate({ to: "/admin/products", replace: true });
+}
+
 function AuthPage() {
   const navigate = useNavigate();
+  const { changed } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +36,7 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/admin", replace: true });
+      if (data.user) void goAfterSignIn(navigate);
     });
   }, [navigate]);
 
@@ -38,12 +48,13 @@ function AuthPage() {
       email: email.trim(),
       password,
     });
-    setLoading(false);
     if (signInError) {
+      setLoading(false);
       setError("Those details didn't work. Check your email and password and try again.");
       return;
     }
-    navigate({ to: "/admin", replace: true });
+    await goAfterSignIn(navigate);
+    setLoading(false);
   }
 
   return (
@@ -58,6 +69,11 @@ function AuthPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Administrator access to the TNT Tools control panel.
         </p>
+        {changed && (
+          <p role="status" className="mt-4 rounded-sm border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-foreground">
+            Password changed. Please sign in again with your new password.
+          </p>
+        )}
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>

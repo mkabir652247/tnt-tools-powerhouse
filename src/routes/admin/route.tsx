@@ -18,6 +18,10 @@ export const Route = createFileRoute("/admin")({
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
 
+    const mustChange = await supabase.rpc("must_change_password");
+    if (mustChange.data !== false) throw redirect({ to: "/change-password" });
+
+
     const [adminCheck, productManagerCheck] = await Promise.all([
       supabase.rpc("has_role", {
         _user_id: data.user.id,
