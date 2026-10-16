@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -439,20 +439,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      category_is_in_active_tool_taxonomy: {
+        Args: { _category_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
-      }
-      product_manager_create_product: {
-        Args: {
-          _image_urls?: Json
-          _product: Json
-          _specifications?: Json
-        }
-        Returns: string
       }
       place_order: {
         Args: { _items: Json; _order: Json }
@@ -461,6 +457,10 @@ export type Database = {
           order_number: string
           total_amount: number
         }[]
+      }
+      product_manager_create_product: {
+        Args: { _image_urls?: Json; _product: Json; _specifications?: Json }
+        Returns: string
       }
     }
     Enums: {
@@ -602,7 +602,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "staff", "customer"],
+      app_role: ["admin", "staff", "customer", "product_manager"],
       movement_type: ["purchase", "sale", "adjustment", "return", "restock"],
       order_status: [
         "pending",
