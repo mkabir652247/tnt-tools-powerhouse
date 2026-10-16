@@ -1,0 +1,11 @@
+# TODO — Product Sub-admin
+
+- [x] **Create a product-only role and enforce its boundary in the app and database.** Add a role separate from `admin`. A Product Sub-admin can add products and categories, but cannot edit or delete existing products or categories, cannot feature or hide products, cannot adjust stock after product creation, and cannot access orders, inventory, customers, settings, or user-role management. Restrict its admin navigation and direct URLs to `/admin/products` and `/admin/categories`; enforce the same permissions with Supabase RLS/RPC/Storage policies so hiding buttons is not the security boundary.
+
+- [x] **Enforce the approved tool-taxonomy guard while allowing immediate publication.** Existing active categories remain root categories controlled by a full admin. A Product Sub-admin can create a new category only as a direct child of an existing active root category. New categories are active immediately. A Product Sub-admin can create a product only in an active root or direct child category; the product is active and appears in the store immediately. The sub-admin cannot create a new root category or use an inactive/out-of-taxonomy category.
+
+- [x] **Support complete, create-only product submissions.** A Product Sub-admin can enter new-product details, images, specifications, and initial stock when creating a product. The product, image rows, specifications, and any opening stock movement are created atomically. Product images upload only to the signed-in user's own folder in the existing bucket. After creation, the sub-admin cannot edit or delete the product or change its stock; full-admin behavior remains available.
+
+- [x] **Apply the additive Supabase migrations and keep generated types synchronized.** The role-enum migration was applied separately before the migration that uses the new enum value. The second migration adds only the required category-parent/product-creator fields, create-only function, taxonomy check, and narrow policies. No role was granted by these migrations.
+
+- [ ] **Assign the Product Sub-admin role to the intended account.** Pending the exact Supabase sign-in email from the user; do not guess the recipient or grant access to the user's own admin account.

@@ -14,21 +14,42 @@ import { Logo } from "@/components/site/Logo";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _user_id: data.user.id,
-      _role: "admin",
-    });
-    if (!isAdmin) throw redirect({ to: "/" });
-    return { user: data.user };
+
+    const [adminCheck, productManagerCheck] = await Promise.all([
+      supabase.rpc("has_role", {
+        _user_id: data.user.id,
+        _role: "admin",
+      }),
+      supabase.rpc("has_role", {
+        _user_id: data.user.id,
+        _role: "product_manager",
+      }),
+    ]);
+    if (adminCheck.error) throw adminCheck.error;
+    if (productManagerCheck.error) throw productManagerCheck.error;
+
+    const isAdmin = Boolean(adminCheck.data);
+    const isProductManager = Boolean(productManagerCheck.data);
+    if (!isAdmin && !isProductManager) throw redirect({ to: "/" });
+
+    const productManagerAllowedPath =
+      location.pathname === "/admin/products" || location.pathname === "/admin/categories";
+    if (!isAdmin && !productManagerAllowedPath) {
+      throw redirect({ to: "/admin/products" });
+    }
+
+    return { user: data.user, isAdmin };
   },
   component: AdminLayout,
   errorComponent: ({ error }) => (
     <div className="container-tnt py-16 text-center">
-      <h1 className="font-display text-xl font-bold uppercase">Admin panel didn't load</h1>
-      <p className="mt-2 text-sm text-muted-foreground">{error instanceof Error ? error.message : "Unknown error"}</p>
+      <h1 className="font-display text-xl font-bold uppercase">Admin panel didn’t load</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {error instanceof Error ? error.message : "Unknown error"}
+      </p>
     </div>
   ),
   notFoundComponent: () => (
@@ -45,11 +66,14 @@ const NAV = [
 ] as const;
 
 function AdminLayout() {
-  const { user } = Route.useRouteContext();
+  const { user, isAdmin } = Route.useRouteContext();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const navItems = isAdmin
+    ? NAV
+    : NAV.filter((item) => item.to === "/admin/products" || item.to === "/admin/categories");
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -68,7 +92,7 @@ function AdminLayout() {
           <Logo />
         </div>
         <nav className="flex flex-col p-2">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -97,13 +121,13 @@ function AdminLayout() {
           <button
             type="button"
             aria-label={open ? "Close menu" : "Open menu"}
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen((value) => !value)}
             className="grid h-9 w-9 place-items-center rounded-sm border border-border lg:hidden"
           >
             {open ? <X width={18} height={18} /> : <Menu width={18} height={18} />}
           </button>
           <span className="font-display text-sm font-bold uppercase tracking-wide">
-            TNT Tools Admin
+            {isAdmin ? "TNT Tools Admin" : "TNT Tools Product Sub-admin"}
           </span>
           <div className="ml-auto flex items-center gap-3">
             <Link to="/" className="text-xs text-muted-foreground hover:text-primary">

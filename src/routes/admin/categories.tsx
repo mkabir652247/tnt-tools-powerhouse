@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +15,7 @@ type CategoryRow = {
   description: string | null;
   image_url: string | null;
   is_active: boolean;
+  parent_category_id: string | null;
 };
 
 function slugify(value: string) {
@@ -26,6 +27,7 @@ function slugify(value: string) {
 }
 
 function AdminCategories() {
+  const { isAdmin } = useRouteContext({ from: "/admin" });
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<CategoryRow> | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -35,32 +37,62 @@ function AdminCategories() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, slug, description, image_url, is_active")
+        .select("id, name, slug, description, image_url, is_active, parent_category_id")
         .order("name");
       if (error) throw error;
       return data as CategoryRow[];
     },
   });
 
+  const rootCategories = (data ?? []).filter(
+    (category) => !category.parent_category_id && (category.is_active || isAdmin),
+  );
+  const categoryById = new Map((data ?? []).map((category) => [category.id, category]));
+
   const save = useMutation({
     mutationFn: async (row: Partial<CategoryRow>) => {
+      const name = row.name?.trim() ?? "";
+      if (!name) throw new Error("Category name is required.");
+      const slug = row.slug?.trim() || slugify(name);
+      if (!slug) throw new Error("Enter a category name that can be used to create a web address.");
       const payload = {
-        name: row.name!.trim(),
-        slug: row.slug?.trim() || slugify(row.name!),
-        description: row.description ?? null,
-        image_url: row.image_url ?? null,
-        is_active: row.is_active ?? true,
+        name,
+        slug,
+        description: row.description?.trim() || null,
+        image_url: row.image_url?.trim() || null,
       };
-      const res = row.id
-        ? await supabase.from("categories").update(payload).eq("id", row.id)
-        : await supabase.from("categories").insert(payload);
-      if (res.error) throw res.error;
+      const parentCategoryId = row.parent_category_id ?? null;
+
+      if (!isAdmin) {
+        if (row.id) throw new Error("Product sub-admins can only add new subcategories.");
+        const parent = rootCategories.find((category) => category.id === parentCategoryId);
+        if (!parent) throw new Error("Choose an existing active root tool category.");
+        const { error } = await supabase.from("categories").insert({
+          ...payload,
+          is_active: true,
+          parent_category_id: parent.id,
+        });
+        if (error) throw error;
+        return;
+      }
+
+      const adminPayload = {
+        ...payload,
+        is_active: row.is_active ?? true,
+        parent_category_id: parentCategoryId,
+      };
+      const result = row.id
+        ? await supabase.from("categories").update(adminPayload).eq("id", row.id)
+        : await supabase.from("categories").insert(adminPayload);
+      if (result.error) throw result.error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setEditing(null);
-      setMessage("Category saved.");
-      qc.invalidateQueries({ queryKey: ["admin", "categories"] });
-      qc.invalidateQueries({ queryKey: ["storefront"] });
+      setMessage(isAdmin ? "Category saved." : "Subcategory added and published.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["admin", "categories"] }),
+        qc.invalidateQueries({ queryKey: ["storefront"] }),
+      ]);
     },
   });
 
@@ -81,20 +113,54 @@ function AdminCategories() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-2xl font-bold uppercase tracking-wide">Categories</h1>
+        <div>
+          <h1 className="font-display text-2xl font-bold uppercase tracking-wide">Categories</h1>
+          {!isAdmin && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add a subcategory under an active tool category. It will appear in the store
+              immediately.
+            </p>
+          )}
+        </div>
         <button
-          onClick={() => setEditing({ is_active: true })}
-          className="btn-orange ml-auto px-4 py-2 text-xs"
+          type="button"
+          onClick={() => {
+            setMessage(null);
+            setEditing({ is_active: true, parent_category_id: null });
+          }}
+          disabled={!isAdmin && rootCategories.length === 0}
+          className="btn-orange ml-auto px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Add category
+          {isAdmin ? "Add category" : "Add subcategory"}
         </button>
       </div>
 
-      {message && <p className="text-sm text-emerald-400">{message}</p>}
-      {save.error && (
-        <p className="text-sm text-destructive">Couldn't save: {(save.error as Error).message}</p>
+      {!isAdmin && rootCategories.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          There are no active root categories. Ask a full admin to add or activate a tool category
+          first.
+        </p>
       )}
-      {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
+      {message && (
+        <p role="status" className="text-sm text-emerald-400">
+          {message}
+        </p>
+      )}
+      {save.error && (
+        <p role="alert" className="text-sm text-destructive">
+          Couldn’t save: {(save.error as Error).message}
+        </p>
+      )}
+      {toggleActive.error && (
+        <p role="alert" className="text-sm text-destructive">
+          Couldn’t change category visibility: {(toggleActive.error as Error).message}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {(error as Error).message}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="h-40 animate-pulse rounded-sm border border-border bg-surface" />
@@ -108,34 +174,59 @@ function AdminCategories() {
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-2">Name</th>
+                <th className="px-4 py-2">Parent</th>
                 <th className="hidden px-4 py-2 sm:table-cell">Slug</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data!.map((c) => (
-                <tr key={c.id} className="border-t border-border">
-                  <td className="px-4 py-2 font-semibold">{c.name}</td>
-                  <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">{c.slug}</td>
-                  <td className="px-4 py-2">
-                    <span className={c.is_active ? "text-emerald-400" : "text-muted-foreground"}>
-                      {c.is_active ? "Active" : "Hidden"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button onClick={() => setEditing(c)} className="text-xs text-primary hover:underline">
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => toggleActive.mutate(c)}
-                      className="ml-3 text-xs text-muted-foreground hover:text-primary"
-                    >
-                      {c.is_active ? "Hide" : "Show"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {data!.map((category) => {
+                const parentName = category.parent_category_id
+                  ? (categoryById.get(category.parent_category_id)?.name ?? "Inactive root")
+                  : "Root category";
+                return (
+                  <tr key={category.id} className="border-t border-border">
+                    <td className="px-4 py-2 font-semibold">{category.name}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{parentName}</td>
+                    <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
+                      {category.slug}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={
+                          category.is_active ? "text-emerald-400" : "text-muted-foreground"
+                        }
+                      >
+                        {category.is_active ? "Active" : "Hidden"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {isAdmin ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(category)}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={toggleActive.isPending}
+                            onClick={() => toggleActive.mutate(category)}
+                            className="ml-3 text-xs text-muted-foreground hover:text-primary disabled:opacity-50"
+                          >
+                            {category.is_active ? "Hide" : "Show"}
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Create-only access</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -145,54 +236,97 @@ function AdminCategories() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
           <div className="w-full max-w-lg rounded-sm border border-border bg-surface p-5">
             <h2 className="font-display text-lg font-bold uppercase">
-              {editing.id ? "Edit category" : "Add category"}
+              {editing.id ? "Edit category" : isAdmin ? "Add category" : "Add subcategory"}
             </h2>
             <form
               className="mt-4 space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 save.mutate(editing);
               }}
             >
               <Field label="Name">
                 <input
                   required
+                  maxLength={160}
                   className="field-tnt"
                   value={editing.name ?? ""}
-                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  onChange={(event) => setEditing({ ...editing, name: event.target.value })}
                 />
+              </Field>
+              <Field label={isAdmin ? "Parent category" : "Parent tool category"}>
+                <select
+                  required={!isAdmin}
+                  className="field-tnt"
+                  value={editing.parent_category_id ?? ""}
+                  onChange={(event) =>
+                    setEditing({ ...editing, parent_category_id: event.target.value || null })
+                  }
+                >
+                  <option value="">
+                    {isAdmin ? "Root category (no parent)" : "Choose an active root category"}
+                  </option>
+                  {rootCategories
+                    .filter((category) => category.id !== editing.id)
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                </select>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {isAdmin
+                    ? "Only root categories can be selected as a parent."
+                    : "Subcategories must belong directly to an existing active root category."}
+                </span>
               </Field>
               <Field label="Slug (web address)">
                 <input
+                  maxLength={180}
                   className="field-tnt"
                   placeholder="auto from name"
                   value={editing.slug ?? ""}
-                  onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
+                  onChange={(event) => setEditing({ ...editing, slug: event.target.value })}
                 />
               </Field>
               <Field label="Description">
                 <textarea
                   rows={3}
+                  maxLength={1000}
                   className="field-tnt"
                   value={editing.description ?? ""}
-                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  onChange={(event) => setEditing({ ...editing, description: event.target.value })}
                 />
               </Field>
               <Field label="Image URL">
                 <input
                   className="field-tnt"
                   value={editing.image_url ?? ""}
-                  onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                  onChange={(event) => setEditing({ ...editing, image_url: event.target.value })}
                 />
               </Field>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={editing.is_active ?? true}
-                  onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })}
-                />
-                Visible on the store
-              </label>
+              {isAdmin ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editing.is_active ?? true}
+                    onChange={(event) =>
+                      setEditing({ ...editing, is_active: event.target.checked })
+                    }
+                  />
+                  Visible on the store
+                </label>
+              ) : (
+                <p className="rounded-sm border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+                  New subcategories are published immediately. Existing categories cannot be edited
+                  or hidden from this account.
+                </p>
+              )}
+              {save.error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {(save.error as Error).message}
+                </p>
+              )}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -201,7 +335,11 @@ function AdminCategories() {
                 >
                   Cancel
                 </button>
-                <button type="submit" disabled={save.isPending} className="btn-orange px-4 py-2 text-xs">
+                <button
+                  type="submit"
+                  disabled={save.isPending}
+                  className="btn-orange px-4 py-2 text-xs"
+                >
                   {save.isPending ? "Saving…" : "Save"}
                 </button>
               </div>

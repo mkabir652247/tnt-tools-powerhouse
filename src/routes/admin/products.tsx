@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import { ImagePlus, PackagePlus, Pencil, Search } from "lucide-react";
@@ -32,7 +32,13 @@ type ProductRow = {
   specifications: ProductSpec[];
 };
 
-type CategoryRow = { id: string; name: string; slug: string; is_active: boolean };
+type CategoryRow = {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  parent_category_id: string | null;
+};
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -172,7 +178,10 @@ async function loadAdminProducts() {
           "id, name, slug, description, short_description, category_id, brand, sku, price, compare_at_price, stock_quantity, low_stock_threshold, is_featured, is_active, created_at",
         )
         .order("created_at", { ascending: false }),
-      supabase.from("categories").select("id, name, slug, is_active").order("name"),
+      supabase
+        .from("categories")
+        .select("id, name, slug, is_active, parent_category_id")
+        .order("name"),
     ]);
 
   if (productsError) throw productsError;
@@ -213,7 +222,15 @@ async function loadAdminProducts() {
     specificationRows = specifications ?? [];
   }
 
-  const categoryById = new Map(categoryRows.map((category) => [category.id, category.name]));
+  const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
+  const categoryLabel = (categoryId: string | null) => {
+    const category = categoryId ? categoryById.get(categoryId) : undefined;
+    if (!category) return null;
+    const parent = category.parent_category_id
+      ? categoryById.get(category.parent_category_id)
+      : undefined;
+    return [parent?.name, category.name].filter(Boolean).join(" / ");
+  };
   const imagesById = new Map<string, string[]>();
   for (const image of imageRows) {
     const list = imagesById.get(image.product_id) ?? [];
@@ -232,7 +249,7 @@ async function loadAdminProducts() {
       ...product,
       price: Number(product.price),
       compare_at_price: product.compare_at_price == null ? null : Number(product.compare_at_price),
-      category_name: product.category_id ? (categoryById.get(product.category_id) ?? null) : null,
+      category_name: categoryLabel(product.category_id),
       image_urls: imagesById.get(product.id) ?? [],
       specifications: specificationsById.get(product.id) ?? [],
     })) as ProductRow[],
@@ -300,6 +317,7 @@ async function saveProductDetails(productId: string, draft: ProductDraft) {
 }
 
 function AdminProducts() {
+  const { isAdmin } = useRouteContext({ from: "/admin" });
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<ProductDraft | null>(null);
   const [search, setSearch] = useState("");
@@ -326,6 +344,21 @@ function AdminProducts() {
       const images = parseImageUrls(draft.image_urls);
       const specifications = parseSpecifications(draft.specifications);
 
+      if (!isAdmin) {
+        if (images.length > 12) throw new Error("A product can have at most 12 images.");
+        if (specifications.length > 50)
+          throw new Error("A product can have at most 50 specifications.");
+        if (
+          specifications.some(
+            (item) => item.specification_name.length > 120 || item.specification_value.length > 500,
+          )
+        ) {
+          throw new Error(
+            "Specification names are limited to 120 characters and values to 500 characters.",
+          );
+        }
+      }
+
       if (!name) throw new Error("Product name is required.");
       if (!draft.category_id) throw new Error("Choose a category.");
       if (!draft.price.trim()) throw new Error("Selling price is required.");
@@ -351,13 +384,50 @@ function AdminProducts() {
         price,
         compare_at_price: compareAt,
         low_stock_threshold: threshold,
-        is_featured: draft.is_featured,
-        is_active: draft.is_active,
+        is_featured: isAdmin ? draft.is_featured : false,
+        is_active: isAdmin ? draft.is_active : true,
       };
+
+      if (!isAdmin) {
+        if (draft.id) throw new Error("Product sub-admins can only add new products.");
+        const { error } = await supabase.rpc("product_manager_create_product", {
+          _product: {
+            name,
+            slug,
+            description: basePayload.description,
+            short_description: basePayload.short_description,
+            category_id: draft.category_id,
+            brand: basePayload.brand,
+            sku: basePayload.sku,
+            price,
+            compare_at_price: compareAt,
+            stock_quantity: stock,
+            low_stock_threshold: threshold,
+          },
+          _image_urls: images,
+          _specifications: specifications,
+        });
+        if (error) {
+          if (error.code === "23505") {
+            throw new Error(
+              error.message.includes("sku")
+                ? "Another product already uses this SKU."
+                : "Another product already uses this web address (slug).",
+            );
+          }
+          throw error;
+        }
+        return;
+      }
 
       // Stock changes always go through the database stock function so every change is logged.
       const result = draft.id
-        ? await supabase.from("products").update(basePayload).eq("id", draft.id).select("id, stock_quantity").single()
+        ? await supabase
+            .from("products")
+            .update(basePayload)
+            .eq("id", draft.id)
+            .select("id, stock_quantity")
+            .single()
         : await supabase
             .from("products")
             .insert({ ...basePayload, stock_quantity: 0 })
@@ -406,7 +476,7 @@ function AdminProducts() {
     },
     onSuccess: async () => {
       setEditing(null);
-      setNotice("Product saved.");
+      setNotice(isAdmin ? "Product saved." : "Product created and published.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin", "products"] }),
         queryClient.invalidateQueries({ queryKey: ["storefront", "catalog"] }),
@@ -459,7 +529,6 @@ function AdminProducts() {
     onError: (error) => setNotice((error as Error).message),
   });
 
-
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (query.data?.products ?? []).filter((product) => {
@@ -478,6 +547,11 @@ function AdminProducts() {
   }, [query.data?.products, search, filter]);
 
   const products = query.data?.products ?? [];
+  const availableCategories = (query.data?.categories ?? []).filter((category) => {
+    if (!category.parent_category_id) return category.is_active || isAdmin;
+    const parent = query.data?.categories.find((item) => item.id === category.parent_category_id);
+    return Boolean(parent && !parent.parent_category_id && (parent.is_active || isAdmin));
+  });
   const lowStockCount = products.filter(
     (product) => product.stock_quantity <= product.low_stock_threshold,
   ).length;
@@ -501,6 +575,17 @@ function AdminProducts() {
     if (files.length === 0) return;
     clearUploadStatus();
 
+    if (!isAdmin) {
+      const existingImageCount = (editing?.image_urls ?? "")
+        .split(/\r?\n/)
+        .map((url) => url.trim())
+        .filter(Boolean).length;
+      if (existingImageCount + files.length > 12) {
+        setUploadError("Product Sub-admins can attach at most 12 images to one product.");
+        return;
+      }
+    }
+
     for (const file of files) {
       if (!IMAGE_EXTENSIONS[file.type]) {
         setUploadError(`${file.name} is not a supported image. Use JPEG, PNG, WebP, or AVIF.`);
@@ -517,7 +602,7 @@ function AdminProducts() {
     try {
       const { data, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
-      if (!data.user) throw new Error("Sign in as an administrator before uploading images.");
+      if (!data.user) throw new Error("Sign in with an authorized product-admin account first.");
 
       const storage = supabase.storage.from(PRODUCT_IMAGE_BUCKET);
       for (const file of files) {
@@ -530,14 +615,10 @@ function AdminProducts() {
         });
         if (error) throw error;
 
-        // Bucket is private (workspace blocks public buckets) — use a long-lived signed link.
-        const { data: signed, error: signError } = await storage.createSignedUrl(
-          uploaded.path,
-          60 * 60 * 24 * 365 * 10,
-        );
-        if (signError || !signed) throw signError ?? new Error("Couldn't create image link.");
-        uploadedUrls.push(signed.signedUrl);
-        appendImageUrls([signed.signedUrl]);
+        const { data: publicImage } = storage.getPublicUrl(uploaded.path);
+        if (!publicImage.publicUrl) throw new Error("Couldn't create image link.");
+        uploadedUrls.push(publicImage.publicUrl);
+        appendImageUrls([publicImage.publicUrl]);
       }
       setUploadNotice(
         `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Save the product to attach them to the listing.`,
@@ -560,6 +641,12 @@ function AdminProducts() {
         <div>
           <p className="eyebrow">Catalogue</p>
           <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-wide">Products</h1>
+          {!isAdmin && (
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Create new tool listings and set their initial stock. Products publish immediately;
+              existing products and stock changes are managed by a full admin.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -630,7 +717,7 @@ function AdminProducts() {
         >
           <option value="all">All products</option>
           <option value="active">Published</option>
-          <option value="hidden">Hidden</option>
+          {isAdmin && <option value="hidden">Hidden</option>}
           <option value="low-stock">Low stock</option>
         </select>
       </div>
@@ -671,7 +758,7 @@ function AdminProducts() {
                 <th className="px-4 py-3 text-right">Price</th>
                 <th className="px-4 py-3 text-right">Stock</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3 text-right">{isAdmin ? "Actions" : "Access"}</th>
               </tr>
             </thead>
             <tbody>
@@ -720,37 +807,43 @@ function AdminProducts() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotice(null);
-                        clearUploadStatus();
-                        setEditing(toDraft(product));
-                      }}
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      <Pencil width={13} height={13} /> Edit
-                    </button>
-                    <button
-                      type="button"
-                      disabled={toggleActive.isPending}
-                      onClick={() => toggleActive.mutate(product)}
-                      className="ml-3 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-                    >
-                      {product.is_active ? "Hide" : "Publish"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={removeProduct.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Delete "${product.name}" permanently?`)) {
-                          removeProduct.mutate(product);
-                        }
-                      }}
-                      className="ml-3 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
-                    >
-                      Delete
-                    </button>
+                    {isAdmin ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotice(null);
+                            clearUploadStatus();
+                            setEditing(toDraft(product));
+                          }}
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          <Pencil width={13} height={13} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={toggleActive.isPending}
+                          onClick={() => toggleActive.mutate(product)}
+                          className="ml-3 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {product.is_active ? "Hide" : "Publish"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={removeProduct.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Delete "${product.name}" permanently?`)) {
+                              removeProduct.mutate(product);
+                            }
+                          }}
+                          className="ml-3 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Read-only</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -774,7 +867,7 @@ function AdminProducts() {
                   id="product-editor-title"
                   className="mt-1 font-display text-xl font-bold uppercase"
                 >
-                  {editing.id ? "Edit product" : "Add product"}
+                  {editing.id ? "Edit product" : isAdmin ? "Add product" : "Add & publish product"}
                 </h2>
               </div>
               <button
@@ -833,25 +926,36 @@ function AdminProducts() {
                 </Field>
                 <Field label="Category">
                   <select
+                    required
                     className="field-tnt"
                     value={editing.category_id}
                     onChange={(event) => setField("category_id", event.target.value)}
                   >
-                    <option value="">No category</option>
-                    {(query.data?.categories ?? []).map((category) => (
-                      <option
-                        key={category.id}
-                        value={category.id}
-                        disabled={!category.is_active && editing.category_id !== category.id}
-                      >
-                        {category.name}
-                        {category.is_active ? "" : " (hidden)"}
-                      </option>
-                    ))}
+                    <option value="">{isAdmin ? "No category" : "Choose a tool category"}</option>
+                    {availableCategories.map((category) => {
+                      const parentName = category.parent_category_id
+                        ? query.data?.categories.find(
+                            (item) => item.id === category.parent_category_id,
+                          )?.name
+                        : null;
+                      return (
+                        <option
+                          key={category.id}
+                          value={category.id}
+                          disabled={!category.is_active && editing.category_id !== category.id}
+                        >
+                          {parentName ? `${parentName} / ` : ""}
+                          {category.name}
+                          {category.is_active ? "" : " (hidden)"}
+                        </option>
+                      );
+                    })}
                   </select>
-                  {(query.data?.categories.length ?? 0) === 0 && (
+                  {availableCategories.length === 0 && (
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      No categories yet. Add one from the Categories section.
+                      {isAdmin
+                        ? "No categories yet. Add one from the Categories section."
+                        : "No active tool categories are available. Ask a full admin to activate a root category."}
                     </span>
                   )}
                 </Field>
@@ -876,7 +980,7 @@ function AdminProducts() {
                     onChange={(event) => setField("compare_at_price", event.target.value)}
                   />
                 </Field>
-                <Field label="Stock quantity">
+                <Field label={isAdmin ? "Stock quantity" : "Initial stock quantity"}>
                   <input
                     required
                     type="number"
@@ -931,9 +1035,10 @@ function AdminProducts() {
                   className="field-tnt"
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  JPEG, PNG, WebP, or AVIF; up to 10 MB each. Files upload immediately to the public
-                  product-images bucket. If you cancel, uploaded files remain in Storage but are not
-                  attached to a product until saved.
+                  JPEG, PNG, WebP, or AVIF; up to 10 MB each. Product Sub-admins may attach up to 12
+                  images and must use files in their own Storage folder. Files upload immediately to
+                  the public product-images bucket. If you cancel, uploaded files remain in Storage
+                  but are not attached to a product until saved.
                 </span>
               </Field>
               {uploadError && (
@@ -952,11 +1057,14 @@ function AdminProducts() {
                   rows={3}
                   className="field-tnt"
                   placeholder="Uploaded URLs appear here; you can also paste one public URL per line."
+                  readOnly={!isAdmin}
                   value={editing.image_urls}
                   onChange={(event) => setField("image_urls", event.target.value)}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  Save the product to store these URLs in the existing product_images table.
+                  {isAdmin
+                    ? "Save the product to store these URLs in the existing product_images table."
+                    : "Only images uploaded above to your own product-images folder can be attached."}
                 </span>
               </Field>
 
@@ -969,27 +1077,37 @@ function AdminProducts() {
                   onChange={(event) => setField("specifications", event.target.value)}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  Enter one “Name: Value” pair per line.
+                  Enter one “Name: Value” pair per line. Product Sub-admins can add up to 50
+                  specifications; names allow 120 characters and values 500.
                 </span>
               </Field>
 
-              <div className="flex flex-wrap gap-5 border-t border-border pt-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={editing.is_active}
-                    onChange={(event) => setField("is_active", event.target.checked)}
-                  />
-                  Publish on store
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={editing.is_featured}
-                    onChange={(event) => setField("is_featured", event.target.checked)}
-                  />
-                  Feature on homepage
-                </label>
+              <div className="border-t border-border pt-4">
+                {isAdmin ? (
+                  <div className="flex flex-wrap gap-5">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editing.is_active}
+                        onChange={(event) => setField("is_active", event.target.checked)}
+                      />
+                      Publish on store
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editing.is_featured}
+                        onChange={(event) => setField("is_featured", event.target.checked)}
+                      />
+                      Feature on homepage
+                    </label>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    New products publish immediately. Only a full admin can feature, hide, edit, or
+                    delete listings.
+                  </p>
+                )}
               </div>
 
               {save.error && (
