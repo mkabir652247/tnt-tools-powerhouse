@@ -24,6 +24,9 @@
 - [x] Stage 6: storefront integration, image storage, testing
 
 ## Open
+- [ ] Add safe category deletion and consolidate to the four requested categories without deleting products.
+- [ ] Allow product sub-admins to edit and safely delete products; verify access boundaries.
+- [ ] Put featured products above categories and add Show more to all products; verify homepage.
 - [x] Flat Rs 645 shipping shared across cart, checkout, and order creation; pricing test and checkout display verified.
 - [x] Two categories per mobile row on home and categories pages; verified at phone widths.
 - [ ] Delete test products/orders (awaiting user approval)
