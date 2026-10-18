@@ -446,6 +446,14 @@ export type Database = {
         Args: { _category_id: string }
         Returns: boolean
       }
+      delete_catalog_category: {
+        Args: { _category_id: string }
+        Returns: undefined
+      }
+      delete_catalog_product: {
+        Args: { _product_id: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -466,6 +474,15 @@ export type Database = {
       product_manager_create_product: {
         Args: { _image_urls?: Json; _product: Json; _specifications?: Json }
         Returns: string
+      }
+      product_manager_update_product: {
+        Args: {
+          _image_urls?: Json
+          _product: Json
+          _product_id: string
+          _specifications?: Json
+        }
+        Returns: undefined
       }
     }
     Enums: {
