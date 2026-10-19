@@ -111,19 +111,24 @@ const REVIEWS = [
 
 function Home() {
   const [quick, setQuick] = useState<Product | null>(null);
+  const [showAllProducts, setShowAllProducts] = useState(false);
   const {
     catalogCategories: categories,
     catalogProducts: products,
     catalogLoading,
     catalogError,
   } = useShop();
-  const featured = products.slice(0, 8);
+  const featuredProducts = products.filter((product) => product.badges.includes("Featured"));
+  const featuredPreview = featuredProducts.slice(0, 8);
+  const visibleProducts = showAllProducts ? products : featuredPreview;
   const bestSellers = products.filter((p) => p.badges.length > 0).slice(0, 4);
-  const emptyCatalogMessage = catalogError
+  const emptyFeaturedMessage = catalogError
     ? "The live product catalog is unavailable. Please try again later."
     : catalogLoading
       ? "Loading products…"
-      : "No products have been added yet. Please check back soon.";
+      : products.length > 0
+        ? "No products are marked as featured yet. Select Show more to browse the full catalog."
+        : "No products have been added yet. Please check back soon.";
 
   return (
     <div>
@@ -177,6 +182,39 @@ function Home() {
         </div>
       </section>
 
+      {/* FEATURED */}
+      <section className="border-y border-border bg-surface/40 py-16">
+        <div className="container-tnt">
+          <SectionHead eyebrow="Featured Products" title="Tools That Earn Their Keep" />
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {visibleProducts.length > 0 ? (
+              visibleProducts.map((product) => (
+                <ProductCard key={product.id} product={product} onQuickView={setQuick} />
+              ))
+            ) : (
+              <p
+                role={catalogError ? "alert" : "status"}
+                className="col-span-full text-center text-sm text-muted-foreground"
+              >
+                {emptyFeaturedMessage}
+              </p>
+            )}
+          </div>
+          {(showAllProducts || products.length > featuredPreview.length) && (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                aria-expanded={showAllProducts}
+                onClick={() => setShowAllProducts((showAll) => !showAll)}
+                className="btn-orange px-5 py-2.5 text-xs"
+              >
+                {showAllProducts ? "Show less" : "Show more"}
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* CATEGORIES */}
       <section className="container-tnt py-16">
         <SectionHead
@@ -206,36 +244,15 @@ function Home() {
                 <h3 className="min-h-10 break-words font-display text-sm font-extrabold leading-tight transition-colors group-hover:text-primary sm:min-h-0 sm:text-lg">
                   {c.name}
                 </h3>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">{c.description}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">
+                  {c.description}
+                </p>
                 <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary">
                   Browse <ArrowRight width={14} height={14} />
                 </span>
               </div>
             </Link>
           ))}
-        </div>
-      </section>
-
-      {/* FEATURED */}
-      <section className="border-y border-border bg-surface/40 py-16">
-        <div className="container-tnt">
-          <SectionHead
-            eyebrow="Featured Products"
-            title="Tools That Earn Their Keep"
-            action={{ to: "/shop", label: "View all products" }}
-          />
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            {featured.length > 0 ? (
-              featured.map((p) => <ProductCard key={p.id} product={p} onQuickView={setQuick} />)
-            ) : (
-              <p
-                role={catalogError ? "alert" : "status"}
-                className="col-span-full text-center text-sm text-muted-foreground"
-              >
-                {emptyCatalogMessage}
-              </p>
-            )}
-          </div>
         </div>
       </section>
 

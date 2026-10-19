@@ -29,3 +29,10 @@ The role may open only `/admin/products` and `/admin/categories`. It must be red
 ## Constraints
 
 The existing Supabase project is shared with production; migrations must be additive and narrowly scoped. Do not grant a role to an account until the user provides that person's exact Supabase sign-in email. The role system and policies may be implemented before account assignment, but the user remains the only admin until a specific account is authorized.
+
+
+## Follow-up: homepage and product permissions (October 19, 2026)
+
+- In `src/routes/index.tsx`, move the featured-products section above Categories. Use products genuinely marked Featured by the live catalog, show up to eight at first, and add an inline **Show more** control that expands to the complete live catalog (with **Show less** to collapse). Preserve the current TNT Tools visual system and all other homepage sections.
+- Category deletion is an inspection request, not approval to add a delete control. The current admin UI has no category-delete button. Live RLS allows a full admin to issue direct table deletes, subject to product/subcategory foreign-key restrictions; the latest category-delete RPC is service-role only.
+- The latest repo has server-side product-manager update/delete support, but the current product page still exposes Edit/Delete only to full admins. Before changing access, clarify whether the existing `product_manager` role should be expanded for all holders or a separate second role should be created, and which product fields/actions the additional role may edit. Do not change database permissions or assign another account until confirmed.
