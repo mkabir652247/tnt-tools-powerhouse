@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Keep the shipping charge in the browser-safe shipping module and use it in cart, checkout, and server order creation so displayed and saved totals agree.
+- Privileged catalog edits/deletions use authenticated server functions with user-role checks and service-only transactional SQL functions, preserving inventory logs and ordered-product history.
