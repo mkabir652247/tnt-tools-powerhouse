@@ -447,11 +447,11 @@ export type Database = {
         Returns: boolean
       }
       delete_catalog_category: {
-        Args: { _category_id: string }
+        Args: { _actor: string; _category_id: string }
         Returns: undefined
       }
       delete_catalog_product: {
-        Args: { _product_id: string }
+        Args: { _actor: string; _product_id: string }
         Returns: undefined
       }
       has_role: {
@@ -477,6 +477,7 @@ export type Database = {
       }
       product_manager_update_product: {
         Args: {
+          _actor: string
           _image_urls?: Json
           _product: Json
           _product_id: string
