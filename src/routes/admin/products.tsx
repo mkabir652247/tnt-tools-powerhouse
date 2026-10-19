@@ -1,8 +1,10 @@
 import { createFileRoute, useRouteContext } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import { ImagePlus, PackagePlus, Pencil, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { manageCatalog } from "@/lib/catalog-admin.functions";
 import { money } from "@/lib/admin-format";
 
 export const Route = createFileRoute("/admin/products")({
@@ -320,6 +322,7 @@ function AdminProducts() {
   const { isAdmin } = useRouteContext({ from: "/admin" });
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<ProductDraft | null>(null);
+  const manageCatalogAction = useServerFn(manageCatalog);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [notice, setNotice] = useState<string | null>(null);
@@ -389,7 +392,30 @@ function AdminProducts() {
       };
 
       if (!isAdmin) {
-        if (draft.id) throw new Error("Product sub-admins can only add new products.");
+        if (draft.id) {
+          await manageCatalogAction({
+            data: {
+              action: "update-product",
+              id: draft.id,
+              product: {
+                name,
+                slug,
+                description: basePayload.description,
+                short_description: basePayload.short_description,
+                category_id: draft.category_id,
+                brand: basePayload.brand,
+                sku: basePayload.sku,
+                price,
+                compare_at_price: compareAt,
+                stock_quantity: stock,
+                low_stock_threshold: threshold,
+              },
+              images,
+              specifications,
+            },
+          });
+          return;
+        }
         const { error } = await supabase.rpc("product_manager_create_product", {
           _product: {
             name,
@@ -474,9 +500,15 @@ function AdminProducts() {
         await queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       }
     },
-    onSuccess: async () => {
+    onSuccess: async (_result, draft) => {
       setEditing(null);
-      setNotice(isAdmin ? "Product saved." : "Product created and published.");
+      setNotice(
+        isAdmin
+          ? "Product saved."
+          : draft.id
+            ? "Product updated."
+            : "Product created and published.",
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin", "products"] }),
         queryClient.invalidateQueries({ queryKey: ["storefront", "catalog"] }),
@@ -502,21 +534,12 @@ function AdminProducts() {
     },
   });
 
-  // Safe delete: products that appear in any order are hidden instead, to keep order history intact.
+  // The authenticated server function rejects deletion if a product is in order history.
   const removeProduct = useMutation({
     mutationFn: async (product: ProductRow) => {
-      const { count, error: countError } = await supabase
-        .from("order_items")
-        .select("id", { count: "exact", head: true })
-        .eq("product_id", product.id);
-      if (countError) throw countError;
-      if ((count ?? 0) > 0) {
-        throw new Error(
-          `"${product.name}" is part of ${count} order(s), so it can't be deleted. Use "Hide" to remove it from the store instead.`,
-        );
-      }
-      const { error } = await supabase.from("products").delete().eq("id", product.id);
-      if (error) throw error;
+      await manageCatalogAction({
+        data: { action: "delete-product", id: product.id },
+      });
     },
     onSuccess: async () => {
       setNotice("Product deleted.");
@@ -643,8 +666,8 @@ function AdminProducts() {
           <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-wide">Products</h1>
           {!isAdmin && (
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Create new tool listings and set their initial stock. Products publish immediately;
-              existing products and stock changes are managed by a full admin.
+              Add, edit, and remove tool listings. New products publish immediately, and stock
+              changes are logged. Only a full admin can feature, publish, or hide products.
             </p>
           )}
         </div>
@@ -758,7 +781,7 @@ function AdminProducts() {
                 <th className="px-4 py-3 text-right">Price</th>
                 <th className="px-4 py-3 text-right">Stock</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">{isAdmin ? "Actions" : "Access"}</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -807,19 +830,19 @@ function AdminProducts() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {isAdmin ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotice(null);
-                            clearUploadStatus();
-                            setEditing(toDraft(product));
-                          }}
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          <Pencil width={13} height={13} /> Edit
-                        </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotice(null);
+                          clearUploadStatus();
+                          setEditing(toDraft(product));
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Pencil width={13} height={13} /> Edit
+                      </button>
+                      {isAdmin && (
                         <button
                           type="button"
                           disabled={toggleActive.isPending}
@@ -828,22 +851,24 @@ function AdminProducts() {
                         >
                           {product.is_active ? "Hide" : "Publish"}
                         </button>
-                        <button
-                          type="button"
-                          disabled={removeProduct.isPending}
-                          onClick={() => {
-                            if (window.confirm(`Delete "${product.name}" permanently?`)) {
-                              removeProduct.mutate(product);
-                            }
-                          }}
-                          className="ml-3 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Read-only</span>
-                    )}
+                      )}
+                      <button
+                        type="button"
+                        disabled={removeProduct.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Delete "${product.name}" permanently? Products in order history cannot be deleted.`,
+                            )
+                          ) {
+                            removeProduct.mutate(product);
+                          }
+                        }}
+                        className="ml-3 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </>
                   </td>
                 </tr>
               ))}
@@ -980,7 +1005,7 @@ function AdminProducts() {
                     onChange={(event) => setField("compare_at_price", event.target.value)}
                   />
                 </Field>
-                <Field label={isAdmin ? "Stock quantity" : "Initial stock quantity"}>
+                <Field label={isAdmin || editing.id ? "Stock quantity" : "Initial stock quantity"}>
                   <input
                     required
                     type="number"
@@ -1057,14 +1082,14 @@ function AdminProducts() {
                   rows={3}
                   className="field-tnt"
                   placeholder="Uploaded URLs appear here; you can also paste one public URL per line."
-                  readOnly={!isAdmin}
+                  readOnly={!isAdmin && !editing.id}
                   value={editing.image_urls}
                   onChange={(event) => setField("image_urls", event.target.value)}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
                   {isAdmin
                     ? "Save the product to store these URLs in the existing product_images table."
-                    : "Only images uploaded above to your own product-images folder can be attached."}
+                    : "Existing photos may be kept or removed; new images must be uploaded above to your own Storage folder."}
                 </span>
               </Field>
 
@@ -1104,8 +1129,8 @@ function AdminProducts() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    New products publish immediately. Only a full admin can feature, hide, edit, or
-                    delete listings.
+                    New products publish immediately. You can edit or delete product listings, and
+                    stock changes are logged. Only a full admin can feature, publish, or hide them.
                   </p>
                 )}
               </div>

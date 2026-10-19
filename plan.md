@@ -1,38 +1,22 @@
-# Plan: Product-only sub-admin with tool taxonomy
+# Plan: TNT Tools Product Sub-admin and Homepage
 
-## Goal and approved behavior
+## Approved behavior
 
-Add a separate `product_manager` role, presented in the admin interface as **Product Sub-admin**. This role may create products and categories, but may not modify or delete existing products or categories, nor access store administration outside those creation tasks. New products and categories go live immediately, as requested.
+The existing `product_manager` role remains the sub-admin role. It can create products and direct subcategories under an existing active root tool category; both publish immediately. The user has now authorized this role to edit and delete products as well. The live database currently has one `product_manager` assignment, so this role-level change affects that current holder and any future holders of the same role.
 
-The relevance guard is the approved tool taxonomy: the current active categories are root categories; only a full admin may add or alter roots. A product manager may create a category only as a direct subcategory of an active root. A product-manager-created product must use an active root or direct subcategory. These rules must be enforced by Supabase RLS/database logic, not just by the UI.
+Product managers can edit product details across the catalog, including name/slug, descriptions, category (subject to the active tool-taxonomy guard), brand/SKU, price, stock quantity/threshold, product images, and specifications. Any stock change must continue through the existing audited stock adjustment function. Product managers cannot feature, hide, or publish-toggle products, edit or delete existing categories, or access orders, inventory, customers, settings, or user-role management. Product deletion must use the authenticated server function and its service-only database RPC; products in order history cannot be deleted, preserving order history. A full admin can hide those products instead.
 
-The product manager may create a new product with product content, images, specifications, and its initial stock quantity. The creation operation is atomic and records any opening stock movement. After creation, the product manager cannot edit or delete that product or adjust its stock; those operations remain with a full admin. Product images can be uploaded only to the signed-in user's own folder in the existing product-images bucket.
+The Products page must expose Edit/Delete to product managers while preserving full-admin controls. Product-manager edits and deletions must call `src/lib/catalog-admin.functions.ts` so server-side role checks and service-only RPCs remain the security boundary; do not invoke privileged RPCs directly from browser code. New product creation continues through the existing create-only database function. The admin route remains restricted to `/admin/products` and `/admin/categories` for product managers.
 
-The role may open only `/admin/products` and `/admin/categories`. It must be redirected away from the dashboard, orders, inventory, customers, settings, and any other admin route. Existing full-admin capabilities remain unchanged.
+On the homepage, show products genuinely marked Featured before the Categories section. Show up to eight featured items initially; **Show more** expands inline to every product in the live catalog and **Show less** restores the featured preview.
 
-## Implementation approach
+Category deletion was checked but is not part of this change: no delete button is exposed in the admin UI. Keep category edit/delete privileges unchanged.
 
-- Add `product_manager` to the existing PostgreSQL role enum in its own migration, then add a second migration for category hierarchy, product attribution, a database taxonomy predicate, an atomic create-product RPC, and role-scoped RLS policies for categories, products, images, specifications, and image Storage uploads.
-- Update generated Supabase TypeScript types to include the new role, `categories.parent_category_id`, `products.created_by`, and the create-product RPC.
-- Extend the admin route guard to distinguish full admins from product managers and restrict product managers to the Products and Categories routes. Filter the navigation accordingly.
-- Keep the existing TNT Tools industrial dark/orange visual language. Adapt the existing product form for product-manager create-only use, and the category form for subcategory-only creation; leave full-admin editing and management intact.
-- Reuse the current TanStack Start, Supabase client, React Query, and existing product/category pages; add no new external service or dependency.
+## Implementation approach and project structure
 
-## Project structure
-
-- `src/routes/admin/route.tsx`: role-aware admin guard, route restrictions, and role-filtered navigation.
-- `src/routes/admin/products.tsx`: existing full-admin product management plus a constrained product-manager create flow.
-- `src/routes/admin/categories.tsx`: existing full-admin category management plus product-manager subcategory creation.
-- `src/integrations/supabase/types.ts`: generated schema and RPC types.
-- `supabase/migrations/`: ordered role-enum and least-privilege policy/schema migrations.
-
-## Constraints
-
-The existing Supabase project is shared with production; migrations must be additive and narrowly scoped. Do not grant a role to an account until the user provides that person's exact Supabase sign-in email. The role system and policies may be implemented before account assignment, but the user remains the only admin until a specific account is authorized.
-
-
-## Follow-up: homepage and product permissions (October 19, 2026)
-
-- In `src/routes/index.tsx`, move the featured-products section above Categories. Use products genuinely marked Featured by the live catalog, show up to eight at first, and add an inline **Show more** control that expands to the complete live catalog (with **Show less** to collapse). Preserve the current TNT Tools visual system and all other homepage sections.
-- Category deletion is an inspection request, not approval to add a delete control. The current admin UI has no category-delete button. Live RLS allows a full admin to issue direct table deletes, subject to product/subcategory foreign-key restrictions; the latest category-delete RPC is service-role only.
-- The latest repo has server-side product-manager update/delete support, but the current product page still exposes Edit/Delete only to full admins. Before changing access, clarify whether the existing `product_manager` role should be expanded for all holders or a separate second role should be created, and which product fields/actions the additional role may edit. Do not change database permissions or assign another account until confirmed.
+- `src/routes/index.tsx`: featured-first homepage order and inline full-catalog expansion.
+- `src/routes/admin/products.tsx`: role-aware product edit/delete UI and server-function calls; preserve create, audited stock updates, taxonomy, and product-order safety rules.
+- `src/lib/catalog-admin.functions.ts`: existing authenticated role-checking server function for product updates/deletes; reuse it rather than adding a new privilege path.
+- `src/routes/admin/route.tsx` and `src/routes/admin/categories.tsx`: preserve the existing route and create-only category boundaries.
+- `supabase/migrations/`: reuse the already-applied `product_manager_update_product` and `delete_catalog_product` service-only RPCs; no new database schema change is intended.
+- Keep the current TNT Tools dark/orange design language and existing TanStack Start/Supabase stack; add no dependencies or external services.
