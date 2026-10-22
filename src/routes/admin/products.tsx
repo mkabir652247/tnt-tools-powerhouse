@@ -323,6 +323,12 @@ function AdminProducts() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<ProductDraft | null>(null);
   const manageCatalogAction = useServerFn(manageCatalog);
+  const getCatalogAuthHeaders = async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (!data.session) throw new Error("Your admin session expired. Sign in again and retry.");
+    return { Authorization: `Bearer ${data.session.access_token}` };
+  };
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [notice, setNotice] = useState<string | null>(null);
@@ -400,6 +406,7 @@ function AdminProducts() {
       if (!isAdmin) {
         if (draft.id) {
           await manageCatalogAction({
+            headers: await getCatalogAuthHeaders(),
             data: {
               action: "update-product",
               id: draft.id,
@@ -544,6 +551,7 @@ function AdminProducts() {
   const removeProduct = useMutation({
     mutationFn: async (product: ProductRow) => {
       await manageCatalogAction({
+        headers: await getCatalogAuthHeaders(),
         data: { action: "delete-product", id: product.id },
       });
     },
@@ -669,7 +677,7 @@ function AdminProducts() {
   async function optimizeExistingImages() {
     if (!isAdmin || optimizingExistingImages) return;
     const confirmed = window.confirm(
-      "Optimize every Storage-backed product image, including hidden products? Each replacement will be square WebP. Original files will remain in Storage for rollback.",
+      "Replace every referenced Storage-backed product image with square WebP. After each URL is switched and verified unreferenced, permanently delete that original only if it is larger than 5 MiB. Keep smaller originals; leave external URLs and unreferenced files alone. Continue?",
     );
     if (!confirmed) return;
 
@@ -682,7 +690,7 @@ function AdminProducts() {
       setExistingImageResult(result);
       const savedMiB = Math.max(0, result.originalBytes - result.optimizedBytes) / (1024 * 1024);
       setNotice(
-        `Existing image pass finished: ${result.optimizedObjects} optimized object${result.optimizedObjects === 1 ? "" : "s"}, ${result.updatedReferences} reference${result.updatedReferences === 1 ? "" : "s"} updated, about ${savedMiB.toFixed(1)} MiB saved, ${result.failedObjects} failed, and ${result.skippedObjects} skipped. Original files were retained.`,
+        `Existing image pass finished: ${result.optimizedObjects} optimized object${result.optimizedObjects === 1 ? "" : "s"}, ${result.updatedReferences} reference${result.updatedReferences === 1 ? "" : "s"} updated, about ${savedMiB.toFixed(1)} MiB saved, ${result.removedOversizedObjects} oversized original${result.removedOversizedObjects === 1 ? "" : "s"} removed, ${result.cleanupFailedObjects} cleanup failure${result.cleanupFailedObjects === 1 ? "" : "s"}, ${result.failedObjects} optimization failures, and ${result.skippedObjects} skipped. Only originals over 5 MiB were eligible for deletion.`,
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin", "products"] }),
@@ -727,13 +735,13 @@ function AdminProducts() {
         <section className="flex flex-col gap-3 rounded-sm border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-3xl">
             <h2 className="font-display text-sm font-bold uppercase">
-              Optimize existing product images
+              Optimize images and remove oversized originals
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Process images for published and hidden products. Each Storage-backed image is fitted
-              into a square WebP (maximum 1600 px); new files and database references are created
-              only after successful processing. Original Storage files remain untouched for
-              rollback.
+              Replace every referenced Storage-backed image with a square WebP (maximum 1600 px).
+              Originals over 5 MiB are removed only after their database references switch and a
+              check confirms the old URL is unused. Smaller originals remain for rollback; external
+              URLs and unreferenced Storage objects are untouched.
             </p>
             {optimizingExistingImages && existingImageProgress && (
               <p role="status" className="mt-2 text-xs text-muted-foreground">
@@ -749,7 +757,7 @@ function AdminProducts() {
             {existingImageResult && existingImageResult.errors.length > 0 && (
               <details className="mt-2 text-xs text-muted-foreground">
                 <summary>
-                  {existingImageResult.errors.length} skipped or failed image detail
+                  {existingImageResult.errors.length} skipped, failed, or cleanup detail
                   {existingImageResult.errors.length === 1 ? "" : "s"}
                 </summary>
                 <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -766,7 +774,7 @@ function AdminProducts() {
             disabled={optimizingExistingImages || query.isLoading}
             className="btn-ghost-outline shrink-0 px-4 py-2 text-xs disabled:opacity-50"
           >
-            {optimizingExistingImages ? "Optimizing images…" : "Optimize existing images"}
+            {optimizingExistingImages ? "Optimizing images…" : "Optimize + remove >5 MiB originals"}
           </button>
         </section>
       )}

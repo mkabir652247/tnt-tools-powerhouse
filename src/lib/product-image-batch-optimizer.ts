@@ -15,6 +15,8 @@ export type ExistingImageOptimizationProgress = {
   total: number;
   optimizedObjects: number;
   updatedReferences: number;
+  removedOversizedObjects: number;
+  cleanupFailedObjects: number;
   skippedObjects: number;
   failedObjects: number;
 };
@@ -35,8 +37,9 @@ function errorMessage(error: unknown) {
 
 /**
  * Optimize existing product-image objects from an authenticated full-admin browser session.
- * New WebPs are uploaded first; only then are matching database URLs switched. Original objects
- * are deliberately kept intact as rollback copies.
+ * New WebPs are uploaded first; only then are matching database URLs switched. If a source file
+ * exceeds the Storage limit, remove it only after the old URL is confirmed unreferenced. Smaller
+ * source objects remain available as rollback copies.
  */
 export async function optimizeExistingProductImages(
   onProgress: (progress: ExistingImageOptimizationProgress) => void,
@@ -84,6 +87,8 @@ export async function optimizeExistingProductImages(
     totalObjects: objectGroups.length,
     optimizedObjects: 0,
     updatedReferences: 0,
+    removedOversizedObjects: 0,
+    cleanupFailedObjects: 0,
     skippedObjects: 0,
     failedObjects: 0,
     originalBytes: 0,
@@ -97,6 +102,8 @@ export async function optimizeExistingProductImages(
       total: objectGroups.length,
       optimizedObjects: result.optimizedObjects,
       updatedReferences: result.updatedReferences,
+      removedOversizedObjects: result.removedOversizedObjects,
+      cleanupFailedObjects: result.cleanupFailedObjects,
       skippedObjects: result.skippedObjects,
       failedObjects: result.failedObjects,
     });
@@ -180,12 +187,38 @@ export async function optimizeExistingProductImages(
       result.updatedReferences += updatedCount;
       if (updatedCount !== referenceIds.length) {
         throw new Error(
-          `Only ${updatedCount} of ${referenceIds.length} database image references were switched; original files were retained.`,
+          `Only ${updatedCount} of ${referenceIds.length} database image references were switched; the original was kept.`,
         );
       }
       result.optimizedObjects += 1;
       result.originalBytes += sourceBlob.size;
       result.optimizedBytes += optimizedFile.size;
+
+      if (sourceBlob.size > MAX_PRODUCT_IMAGE_BYTES) {
+        try {
+          const { data: remainingReferences, error: referenceCheckError } = await supabase
+            .from("product_images")
+            .select("id")
+            .eq("image_url", sourceUrl)
+            .limit(1);
+          if (referenceCheckError) throw referenceCheckError;
+          if ((remainingReferences ?? []).length > 0) {
+            throw new Error("The old URL still has a product reference; the original was kept.");
+          }
+
+          const { data: removedFiles, error: removeError } = await storage.remove([objectPath]);
+          if (removeError) throw removeError;
+          if (!removedFiles?.length) {
+            throw new Error("Storage did not confirm deletion; the oversized original may remain.");
+          }
+          result.removedOversizedObjects += 1;
+        } catch (cleanupError) {
+          result.cleanupFailedObjects += 1;
+          result.errors.push(
+            `Object ${index + 1}: The replacement is active, but the original over 5 MiB was kept because cleanup was not confirmed: ${errorMessage(cleanupError)}`,
+          );
+        }
+      }
     } catch (error) {
       result.failedObjects += 1;
       result.errors.push(`Object ${index + 1}: ${errorMessage(error)}`);
