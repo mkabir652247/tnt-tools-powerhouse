@@ -1,22 +1,20 @@
-# Plan: TNT Tools Product Sub-admin and Homepage
+# Plan: TNT Tools homepage and catalog loading
 
 ## Approved behavior
 
-The existing `product_manager` role remains the sub-admin role. It can create products and direct subcategories under an existing active root tool category; both publish immediately. The user has now authorized this role to edit and delete products as well. The live database currently has one `product_manager` assignment, so this role-level change affects that current holder and any future holders of the same role.
+The homepage renders Categories before Featured Products. Featured Products shows up to eight items initially; “Show more” appends every product not yet displayed after the visible featured items, without restarting the list or duplicating products. “Show less” returns to the initial featured preview. If no products are featured but products exist, shoppers can still expand to browse the full catalog.
 
-Product managers can edit product details across the catalog, including name/slug, descriptions, category (subject to the active tool-taxonomy guard), brand/SKU, price, stock quantity/threshold, product images, and specifications. Any stock change must continue through the existing audited stock adjustment function. Product managers cannot feature, hide, or publish-toggle products, edit or delete existing categories, or access orders, inventory, customers, settings, or user-role management. Product deletion must use the authenticated server function and its service-only database RPC; products in order history cannot be deleted, preserving order history. A full admin can hide those products instead.
+Active categories load in their own cached query, so they are usable independently from product images/specifications. The category request is shared with the catalog loader to avoid a duplicate database call. Only active roots and direct active children of active roots are storefront categories/products. A live read-only check found zero currently active children beneath inactive roots and zero active products in those categories. During a category request or an error, the UI does not present seed/demo categories as if they were live links; it shows loading, empty, and error states. The Categories page does not show zero product counts as final while product data is pending or unavailable.
 
-The Products page must expose Edit/Delete to product managers while preserving full-admin controls. Product-manager edits and deletions must call `src/lib/catalog-admin.functions.ts` so server-side role checks and service-only RPCs remain the security boundary; do not invoke privileged RPCs directly from browser code. New product creation continues through the existing create-only database function. The admin route remains restricted to `/admin/products` and `/admin/categories` for product managers.
+## Performance diagnosis and constraints
 
-On the homepage, show products genuinely marked Featured before the Categories section. Show up to eight featured items initially; **Show more** expands inline to every product in the live catalog and **Show less** restores the featured preview.
+On October 22, 2026, the live TNT Tools database reported 42 active products and 4 active categories, with indexes present on `products.is_active`, product/category relationships, and product-image/specification lookups. This does not indicate a large database-row or missing-index bottleneck. The `product-images` Storage bucket has 62 objects, of which 54 referenced active product listings; those referenced objects total 114,747,660 bytes (about 115 MB), 35 are larger than 1 MB, and the largest is 10,250,539 bytes (about 10.3 MB). The previous uploader stored selected files unchanged up to the bucket's 10 MB limit, and product cards use original URLs, so large image payloads are a confirmed, high-confidence source of slow rendering. The uploader now resizes new files to at most 1600 px, WebP-compresses when supported, and sets long immutable cache headers. Existing Storage objects and references are not rewritten or deleted; existing oversized photos must be replaced/re-uploaded or served through enabled Supabase image transforms. Four active categories currently have no database image URL and two active products have no image rows; existing category/product fallback art remains in place.
 
-Category deletion was checked but is not part of this change: no delete button is exposed in the admin UI. Keep category edit/delete privileges unchanged.
+## Implementation and structure
 
-## Implementation approach and project structure
-
-- `src/routes/index.tsx`: featured-first homepage order and inline full-catalog expansion.
-- `src/routes/admin/products.tsx`: role-aware product edit/delete UI and server-function calls; preserve create, audited stock updates, taxonomy, and product-order safety rules.
-- `src/lib/catalog-admin.functions.ts`: existing authenticated role-checking server function for product updates/deletes; reuse it rather than adding a new privilege path.
-- `src/routes/admin/route.tsx` and `src/routes/admin/categories.tsx`: preserve the existing route and create-only category boundaries.
-- `supabase/migrations/`: reuse the already-applied `product_manager_update_product` and `delete_catalog_product` service-only RPCs; no new database schema change is intended.
-- Keep the current TNT Tools dark/orange design language and existing TanStack Start/Supabase stack; add no dependencies or external services.
+- `src/routes/index.tsx`: Categories-before-Featured order and append-only product expansion.
+- `src/lib/catalog.ts`: independent active-category loader alongside the full catalog loader, sharing category data.
+- `src/lib/shop-store.tsx`: category fetch/cache and category-specific loading/error state; no demo-category links during live loading.
+- `src/routes/categories.tsx`: clear category loading/error/empty states and pending/unavailable product-count indicators.
+- `src/routes/admin/products.tsx`: future uploads resize to 1600 px, convert to WebP where browser support permits, and receive one-year cache headers under unique Storage paths.
+- Keep the TNT Tools design, TanStack Start, React Query, and Supabase stack; no database migrations or live media rewrites.

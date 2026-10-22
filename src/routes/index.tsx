@@ -117,10 +117,16 @@ function Home() {
     catalogProducts: products,
     catalogLoading,
     catalogError,
+    catalogCategoriesLoading,
+    catalogCategoriesError,
   } = useShop();
   const featuredProducts = products.filter((product) => product.badges.includes("Featured"));
   const featuredPreview = featuredProducts.slice(0, 8);
-  const visibleProducts = showAllProducts ? products : featuredPreview;
+  const featuredPreviewIds = new Set(featuredPreview.map((product) => product.id));
+  const remainingProducts = products.filter((product) => !featuredPreviewIds.has(product.id));
+  const visibleProducts = showAllProducts
+    ? [...featuredPreview, ...remainingProducts]
+    : featuredPreview;
   const bestSellers = products.filter((p) => p.badges.length > 0).slice(0, 4);
   const emptyFeaturedMessage = catalogError
     ? "The live product catalog is unavailable. Please try again later."
@@ -182,11 +188,73 @@ function Home() {
         </div>
       </section>
 
+      {/* CATEGORIES */}
+      <section className="container-tnt py-16">
+        <SectionHead
+          eyebrow="Shop by Category"
+          title="Every Trade Covered"
+          action={{ to: "/categories", label: "All categories" }}
+        />
+        {catalogCategoriesLoading ? (
+          <p role="status" className="mt-8 text-sm text-muted-foreground">
+            Loading categories…
+          </p>
+        ) : catalogCategoriesError ? (
+          <p role="alert" className="mt-8 text-sm text-destructive">
+            Categories couldn’t be loaded. Please refresh the page and try again.
+          </p>
+        ) : categories.length === 0 ? (
+          <p role="status" className="mt-8 text-sm text-muted-foreground">
+            No active categories are available yet.
+          </p>
+        ) : (
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+            {categories.map((c) => (
+              <Link
+                key={c.slug}
+                to="/shop"
+                search={{ category: c.slug }}
+                className="card-tool group relative min-w-0 overflow-hidden"
+              >
+                <div className="aspect-[16/10] overflow-hidden">
+                  <img
+                    src={c.image}
+                    alt={c.name}
+                    loading="lazy"
+                    decoding="async"
+                    width={1024}
+                    height={1024}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+                </div>
+                <div className="p-3 sm:p-4">
+                  <h3 className="min-h-10 break-words font-display text-sm font-extrabold leading-tight transition-colors group-hover:text-primary sm:min-h-0 sm:text-lg">
+                    {c.name}
+                  </h3>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">
+                    {c.description}
+                  </p>
+                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary">
+                    Browse <ArrowRight width={14} height={14} />
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* FEATURED */}
       <section className="border-y border-border bg-surface/40 py-16">
         <div className="container-tnt">
-          <SectionHead eyebrow="Featured Products" title="Tools That Earn Their Keep" />
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <SectionHead
+            eyebrow={showAllProducts ? "Product Catalog" : "Featured Products"}
+            title={showAllProducts ? "Tools for Every Job" : "Tools That Earn Their Keep"}
+          />
+          <div
+            id="homepage-product-grid"
+            className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+          >
             {visibleProducts.length > 0 ? (
               visibleProducts.map((product) => (
                 <ProductCard key={product.id} product={product} onQuickView={setQuick} />
@@ -204,6 +272,7 @@ function Home() {
             <div className="mt-8 flex justify-center">
               <button
                 type="button"
+                aria-controls="homepage-product-grid"
                 aria-expanded={showAllProducts}
                 onClick={() => setShowAllProducts((showAll) => !showAll)}
                 className="btn-orange px-5 py-2.5 text-xs"
@@ -212,47 +281,6 @@ function Home() {
               </button>
             </div>
           )}
-        </div>
-      </section>
-
-      {/* CATEGORIES */}
-      <section className="container-tnt py-16">
-        <SectionHead
-          eyebrow="Shop by Category"
-          title="Every Trade Covered"
-          action={{ to: "/categories", label: "All categories" }}
-        />
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-          {categories.map((c) => (
-            <Link
-              key={c.slug}
-              to="/shop"
-              search={{ category: c.slug }}
-              className="card-tool group relative min-w-0 overflow-hidden"
-            >
-              <div className="aspect-[16/10] overflow-hidden">
-                <img
-                  src={c.image}
-                  alt={c.name}
-                  loading="lazy"
-                  width={1024}
-                  height={1024}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-              </div>
-              <div className="p-3 sm:p-4">
-                <h3 className="min-h-10 break-words font-display text-sm font-extrabold leading-tight transition-colors group-hover:text-primary sm:min-h-0 sm:text-lg">
-                  {c.name}
-                </h3>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:text-sm">
-                  {c.description}
-                </p>
-                <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary">
-                  Browse <ArrowRight width={14} height={14} />
-                </span>
-              </div>
-            </Link>
-          ))}
         </div>
       </section>
 

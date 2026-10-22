@@ -50,6 +50,45 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
   "image/avif": "avif",
 };
+const MAX_PRODUCT_IMAGE_DIMENSION = 1600;
+const PRODUCT_IMAGE_WEBP_QUALITY = 0.84;
+
+async function optimizeProductImage(file: File): Promise<File> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return file;
+  }
+
+  try {
+    const scale = Math.min(1, MAX_PRODUCT_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    if (file.size < 256 * 1024 && scale === 1) return file;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/webp", PRODUCT_IMAGE_WEBP_QUALITY),
+    );
+    if (!blob || blob.type !== "image/webp" || blob.size > MAX_IMAGE_BYTES) return file;
+    if (scale === 1 && blob.size >= file.size) return file;
+
+    const name = file.name.replace(/\.[^.]+$/, "") || "product-image";
+    return new File([blob], `${name}.webp`, {
+      type: "image/webp",
+      lastModified: file.lastModified,
+    });
+  } finally {
+    bitmap.close();
+  }
+}
 
 type ProductDraft = {
   id?: string;
@@ -629,11 +668,12 @@ function AdminProducts() {
 
       const storage = supabase.storage.from(PRODUCT_IMAGE_BUCKET);
       for (const file of files) {
-        const extension = IMAGE_EXTENSIONS[file.type];
+        const uploadFile = await optimizeProductImage(file);
+        const extension = IMAGE_EXTENSIONS[uploadFile.type];
         const path = `${data.user.id}/${crypto.randomUUID()}.${extension}`;
-        const { data: uploaded, error } = await storage.upload(path, file, {
-          cacheControl: "3600",
-          contentType: file.type,
+        const { data: uploaded, error } = await storage.upload(path, uploadFile, {
+          cacheControl: "31536000",
+          contentType: uploadFile.type,
           upsert: false,
         });
         if (error) throw error;
@@ -644,7 +684,7 @@ function AdminProducts() {
         appendImageUrls([publicImage.publicUrl]);
       }
       setUploadNotice(
-        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Save the product to attach them to the listing.`,
+        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} optimized where supported and uploaded. Save the product to attach them to the listing.`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Image upload failed.";
@@ -1060,10 +1100,11 @@ function AdminProducts() {
                   className="field-tnt"
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  JPEG, PNG, WebP, or AVIF; up to 10 MB each. Product Sub-admins may attach up to 12
-                  images and must use files in their own Storage folder. Files upload immediately to
-                  the public product-images bucket. If you cancel, uploaded files remain in Storage
-                  but are not attached to a product until saved.
+                  JPEG, PNG, WebP, or AVIF; up to 10 MB each. Images are resized to at most 1600 px
+                  and compressed to WebP when your browser supports it. Product Sub-admins may
+                  attach up to 12 images and must use files in their own Storage folder. Files
+                  upload immediately to the public product-images bucket. If you cancel, uploaded
+                  files remain in Storage but are not attached to a product until saved.
                 </span>
               </Field>
               {uploadError && (

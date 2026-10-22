@@ -7,9 +7,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { categories as demoCategories, type Category, type Product } from "@/data/products";
-import { loadStoreCatalog } from "@/lib/catalog";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type Category, type Product } from "@/data/products";
+import { loadStoreCatalog, loadStoreCategories } from "@/lib/catalog";
 
 export type CartLine = { id: string; qty: number };
 
@@ -33,6 +33,8 @@ type ShopState = {
   catalogCategories: Category[];
   catalogLoading: boolean;
   catalogError: boolean;
+  catalogCategoriesLoading: boolean;
+  catalogCategoriesError: boolean;
 };
 
 const ShopContext = createContext<ShopState | null>(null);
@@ -40,6 +42,9 @@ const ShopContext = createContext<ShopState | null>(null);
 const CART_KEY = "tnt-cart";
 const WISH_KEY = "tnt-wishlist";
 const EMPTY_PRODUCTS: Product[] = [];
+const EMPTY_CATEGORIES: Category[] = [];
+const CATEGORIES_QUERY_KEY = ["storefront", "categories"] as const;
+const CATEGORIES_STALE_TIME = 5 * 60_000;
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -62,14 +67,28 @@ export function ShopProvider({
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [lastOrder, setLastOrder] = useState<{ id: string; total: number } | null>(null);
+  const queryClient = useQueryClient();
+  const categoriesQuery = useQuery({
+    queryKey: CATEGORIES_QUERY_KEY,
+    queryFn: loadStoreCategories,
+    enabled: loadCatalog,
+    staleTime: CATEGORIES_STALE_TIME,
+  });
   const catalogQuery = useQuery({
     queryKey: ["storefront", "catalog"],
-    queryFn: loadStoreCatalog,
+    queryFn: () =>
+      loadStoreCatalog(
+        queryClient.ensureQueryData({
+          queryKey: CATEGORIES_QUERY_KEY,
+          queryFn: loadStoreCategories,
+          staleTime: CATEGORIES_STALE_TIME,
+        }),
+      ),
     enabled: loadCatalog,
     staleTime: 60_000,
   });
   const catalogProducts = catalogQuery.data?.products ?? EMPTY_PRODUCTS;
-  const catalogCategories = catalogQuery.data?.categories ?? demoCategories;
+  const catalogCategories = categoriesQuery.data ?? EMPTY_CATEGORIES;
 
   useEffect(() => {
     setCart(read<CartLine[]>(CART_KEY, []));
@@ -161,6 +180,8 @@ export function ShopProvider({
     catalogCategories,
     catalogLoading: catalogQuery.isLoading,
     catalogError: Boolean(catalogQuery.error),
+    catalogCategoriesLoading: categoriesQuery.isLoading,
+    catalogCategoriesError: Boolean(categoriesQuery.error),
   };
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;

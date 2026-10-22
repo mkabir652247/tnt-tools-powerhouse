@@ -11,6 +11,8 @@ export type StoreCatalog = {
   products: Product[];
 };
 
+export type StoreCategory = Category & { id: string; parent_category_id: string | null };
+
 function categoryImage(slug: string) {
   return (
     demoCategories.find((category) => category.slug === slug)?.image ??
@@ -33,6 +35,27 @@ function mapCategory(row: {
   };
 }
 
+export async function loadStoreCategories(): Promise<StoreCategory[]> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, slug, description, image_url, is_active, parent_category_id")
+    .eq("is_active", true)
+    .order("name");
+
+  if (error) throw error;
+  const activeRows = data ?? [];
+  const activeRootIds = new Set(
+    activeRows.filter((row) => row.parent_category_id === null).map((row) => row.id),
+  );
+  return activeRows
+    .filter((row) => row.parent_category_id === null || activeRootIds.has(row.parent_category_id))
+    .map((row) => ({
+      id: row.id,
+      parent_category_id: row.parent_category_id,
+      ...mapCategory(row),
+    }));
+}
+
 function inferProductType(name: string, category: string): Product["type"] {
   const normalized = name.toLowerCase();
   if (category === "hand-tools" || normalized.includes("manual")) return "Manual";
@@ -43,43 +66,41 @@ function inferProductType(name: string, category: string): Product["type"] {
   return "Corded";
 }
 
-export async function loadStoreCatalog(): Promise<StoreCatalog> {
-  const [{ data: categoryRows, error: categoryError }, { data: productRows, error: productError }] =
-    await Promise.all([
-      supabase
-        .from("categories")
-        .select("id, name, slug, description, image_url, is_active")
-        .eq("is_active", true)
-        .order("name"),
-      supabase
-        .from("products")
-        .select(
-          "id, name, slug, description, short_description, category_id, brand, price, compare_at_price, stock_quantity, low_stock_threshold, is_featured",
-        )
-        .eq("is_active", true)
-        .order("created_at", { ascending: false }),
-    ]);
+export async function loadStoreCatalog(
+  categoryRowsPromise: Promise<StoreCategory[]>,
+): Promise<StoreCatalog> {
+  const [categoryRows, { data: productRows, error: productError }] = await Promise.all([
+    categoryRowsPromise,
+    supabase
+      .from("products")
+      .select(
+        "id, name, slug, description, short_description, category_id, brand, price, compare_at_price, stock_quantity, low_stock_threshold, is_featured",
+      )
+      .eq("is_active", true)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (categoryError) throw categoryError;
   if (productError) throw productError;
 
-  const visibleCategories = (categoryRows ?? []).map(mapCategory);
+  const visibleCategories = categoryRows.map(
+    ({ id: _id, parent_category_id: _parentCategoryId, ...category }) => category,
+  );
   const allRows = productRows ?? [];
 
   if (allRows.length === 0) {
     return {
-      categories: visibleCategories.length > 0 ? visibleCategories : demoCategories,
+      categories: visibleCategories,
       products: [],
     };
   }
 
-  const activeCategoryIds = new Set((categoryRows ?? []).map((category) => category.id));
+  const activeCategoryIds = new Set(categoryRows.map((category) => category.id));
   const rows = allRows.filter(
     (product) => !product.category_id || activeCategoryIds.has(product.category_id),
   );
   if (rows.length === 0) {
     return {
-      categories: visibleCategories.length > 0 ? visibleCategories : demoCategories,
+      categories: visibleCategories,
       products: [],
     };
   }
@@ -104,7 +125,7 @@ export async function loadStoreCatalog(): Promise<StoreCatalog> {
   if (imageError) throw imageError;
   if (specificationError) throw specificationError;
 
-  const categoryById = new Map((categoryRows ?? []).map((category) => [category.id, category]));
+  const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
   const imagesByProduct = new Map<string, string[]>();
   for (const image of imageRows ?? []) {
     const urls = imagesByProduct.get(image.product_id) ?? [];
@@ -176,7 +197,7 @@ export async function loadStoreCatalog(): Promise<StoreCatalog> {
   });
 
   return {
-    categories: visibleCategories.length > 0 ? visibleCategories : demoCategories,
+    categories: visibleCategories,
     products: mappedProducts,
   };
 }
