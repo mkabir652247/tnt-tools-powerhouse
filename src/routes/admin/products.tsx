@@ -6,6 +6,12 @@ import { ImagePlus, PackagePlus, Pencil, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { manageCatalog } from "@/lib/catalog-admin.functions";
 import { money } from "@/lib/admin-format";
+import {
+  optimizeExistingProductImages,
+  type ExistingImageOptimizationProgress,
+  type ExistingImageOptimizationResult,
+} from "@/lib/product-image-batch-optimizer";
+import { MAX_PRODUCT_IMAGE_BYTES, optimizeSquareProductImage } from "@/lib/product-image-optimizer";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
@@ -43,52 +49,7 @@ type CategoryRow = {
 };
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const IMAGE_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/avif": "avif",
-};
-const MAX_PRODUCT_IMAGE_DIMENSION = 1600;
-const PRODUCT_IMAGE_WEBP_QUALITY = 0.84;
-
-async function optimizeProductImage(file: File): Promise<File> {
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(file);
-  } catch {
-    return file;
-  }
-
-  try {
-    const scale = Math.min(1, MAX_PRODUCT_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    if (file.size < 256 * 1024 && scale === 1) return file;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) return file;
-    context.drawImage(bitmap, 0, 0, width, height);
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/webp", PRODUCT_IMAGE_WEBP_QUALITY),
-    );
-    if (!blob || blob.type !== "image/webp" || blob.size > MAX_IMAGE_BYTES) return file;
-    if (scale === 1 && blob.size >= file.size) return file;
-
-    const name = file.name.replace(/\.[^.]+$/, "") || "product-image";
-    return new File([blob], `${name}.webp`, {
-      type: "image/webp",
-      lastModified: file.lastModified,
-    });
-  } finally {
-    bitmap.close();
-  }
-}
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 
 type ProductDraft = {
   id?: string;
@@ -368,6 +329,12 @@ function AdminProducts() {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [optimizingExistingImages, setOptimizingExistingImages] = useState(false);
+  const [existingImageProgress, setExistingImageProgress] =
+    useState<ExistingImageOptimizationProgress | null>(null);
+  const [existingImageResult, setExistingImageResult] =
+    useState<ExistingImageOptimizationResult | null>(null);
+  const [existingImageError, setExistingImageError] = useState<string | null>(null);
 
   const clearUploadStatus = () => {
     setUploadError(null);
@@ -649,12 +616,12 @@ function AdminProducts() {
     }
 
     for (const file of files) {
-      if (!IMAGE_EXTENSIONS[file.type]) {
+      if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
         setUploadError(`${file.name} is not a supported image. Use JPEG, PNG, WebP, or AVIF.`);
         return;
       }
-      if (file.size > MAX_IMAGE_BYTES) {
-        setUploadError(`${file.name} is larger than the 10 MB limit.`);
+      if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
+        setUploadError(`${file.name} is larger than the 5 MiB limit.`);
         return;
       }
     }
@@ -662,15 +629,16 @@ function AdminProducts() {
     setUploadingImages(true);
     const uploadedUrls: string[] = [];
     try {
+      const optimizedFiles: File[] = [];
+      for (const file of files) optimizedFiles.push(await optimizeSquareProductImage(file));
+
       const { data, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
       if (!data.user) throw new Error("Sign in with an authorized product-admin account first.");
 
       const storage = supabase.storage.from(PRODUCT_IMAGE_BUCKET);
-      for (const file of files) {
-        const uploadFile = await optimizeProductImage(file);
-        const extension = IMAGE_EXTENSIONS[uploadFile.type];
-        const path = `${data.user.id}/${crypto.randomUUID()}.${extension}`;
+      for (const uploadFile of optimizedFiles) {
+        const path = `${data.user.id}/optimized-${crypto.randomUUID()}.webp`;
         const { data: uploaded, error } = await storage.upload(path, uploadFile, {
           cacheControl: "31536000",
           contentType: uploadFile.type,
@@ -684,7 +652,7 @@ function AdminProducts() {
         appendImageUrls([publicImage.publicUrl]);
       }
       setUploadNotice(
-        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} optimized where supported and uploaded. Save the product to attach them to the listing.`,
+        `${uploadedUrls.length} square WebP image${uploadedUrls.length === 1 ? "" : "s"} optimized and uploaded. Save the product to attach them to the listing.`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Image upload failed.";
@@ -695,6 +663,37 @@ function AdminProducts() {
       );
     } finally {
       setUploadingImages(false);
+    }
+  }
+
+  async function optimizeExistingImages() {
+    if (!isAdmin || optimizingExistingImages) return;
+    const confirmed = window.confirm(
+      "Optimize every Storage-backed product image, including hidden products? Each replacement will be square WebP. Original files will remain in Storage for rollback.",
+    );
+    if (!confirmed) return;
+
+    setOptimizingExistingImages(true);
+    setExistingImageProgress(null);
+    setExistingImageResult(null);
+    setExistingImageError(null);
+    try {
+      const result = await optimizeExistingProductImages(setExistingImageProgress);
+      setExistingImageResult(result);
+      const savedMiB = Math.max(0, result.originalBytes - result.optimizedBytes) / (1024 * 1024);
+      setNotice(
+        `Existing image pass finished: ${result.optimizedObjects} optimized object${result.optimizedObjects === 1 ? "" : "s"}, ${result.updatedReferences} reference${result.updatedReferences === 1 ? "" : "s"} updated, about ${savedMiB.toFixed(1)} MiB saved, ${result.failedObjects} failed, and ${result.skippedObjects} skipped. Original files were retained.`,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "products"] }),
+        queryClient.invalidateQueries({ queryKey: ["storefront", "catalog"] }),
+      ]);
+    } catch (error) {
+      setExistingImageError(
+        error instanceof Error ? error.message : "Existing image optimization failed.",
+      );
+    } finally {
+      setOptimizingExistingImages(false);
     }
   }
 
@@ -723,6 +722,54 @@ function AdminProducts() {
           <PackagePlus width={16} height={16} /> Add product
         </button>
       </div>
+
+      {isAdmin && (
+        <section className="flex flex-col gap-3 rounded-sm border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="font-display text-sm font-bold uppercase">
+              Optimize existing product images
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Process images for published and hidden products. Each Storage-backed image is fitted
+              into a square WebP (maximum 1600 px); new files and database references are created
+              only after successful processing. Original Storage files remain untouched for
+              rollback.
+            </p>
+            {optimizingExistingImages && existingImageProgress && (
+              <p role="status" className="mt-2 text-xs text-muted-foreground">
+                Processing {existingImageProgress.completed} of {existingImageProgress.total} unique
+                image objects…
+              </p>
+            )}
+            {existingImageError && (
+              <p role="alert" className="mt-2 text-xs text-destructive">
+                {existingImageError}
+              </p>
+            )}
+            {existingImageResult && existingImageResult.errors.length > 0 && (
+              <details className="mt-2 text-xs text-muted-foreground">
+                <summary>
+                  {existingImageResult.errors.length} skipped or failed image detail
+                  {existingImageResult.errors.length === 1 ? "" : "s"}
+                </summary>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {existingImageResult.errors.map((message, index) => (
+                    <li key={`${index}-${message}`}>{message}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={optimizeExistingImages}
+            disabled={optimizingExistingImages || query.isLoading}
+            className="btn-ghost-outline shrink-0 px-4 py-2 text-xs disabled:opacity-50"
+          >
+            {optimizingExistingImages ? "Optimizing images…" : "Optimize existing images"}
+          </button>
+        </section>
+      )}
 
       {notice && (
         <p role="status" className="text-sm text-emerald-400">
@@ -1100,11 +1147,12 @@ function AdminProducts() {
                   className="field-tnt"
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  JPEG, PNG, WebP, or AVIF; up to 10 MB each. Images are resized to at most 1600 px
-                  and compressed to WebP when your browser supports it. Product Sub-admins may
-                  attach up to 12 images and must use files in their own Storage folder. Files
-                  upload immediately to the public product-images bucket. If you cancel, uploaded
-                  files remain in Storage but are not attached to a product until saved.
+                  JPEG, PNG, WebP, or AVIF; up to 5 MiB each, with a square aspect ratio (1:1 within
+                  5%). Images are fitted without cropping into a transparent square WebP with a
+                  longest edge of at most 1600 px. Product Sub-admins may attach up to 12 images and
+                  must use files in their own Storage folder. Files upload immediately to the public
+                  product-images bucket. If you cancel, uploaded files remain in Storage but are not
+                  attached to a product until saved.
                 </span>
               </Field>
               {uploadError && (
