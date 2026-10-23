@@ -1,77 +1,72 @@
 # TNT Tools storefront performance audit — 2026-10-23
 
-## Executive summary
+## Executive finding
 
-The evidence does **not** show a multi-second Supabase SQL bottleneck. Read-only database plans complete in about 0.3–1.2 ms, and recent Supabase gateway p95 origin times for catalog endpoints are below one second. In the baseline browser runs, the old loader waited for categories/products and then for a second image/specification request wave before product cards could render. Lazy route chunks also finished just before the catalog requests began. These serial stages can add delay on mobile networks, but the sandbox browser did not reproduce the reported 8–10 seconds.
+I reproduced a long wait in the Lovable share-preview and traced the main delay to **preview JavaScript delivery/startup**, not slow Supabase SQL. On the observed preview host, the first load fetched **186 separate JavaScript modules** (185 from the project host), totaling **2,823,854 encoded bytes / 2,879,354 transferred bytes**. These include development-runtime assets such as `index.dev.js`, React Refresh, and individual `.tsx` source modules. The last app modules completed at **23.481 s** after navigation; only then did the app start its Categories and Products REST requests at **23.626 s**.
 
-I split core product/category data from image/specification metadata so cards can render first, added neutral image placeholders during metadata loading, and corrected the Shop count to say “Loading products…” instead of briefly showing a false zero. The app code was committed and pushed to GitHub `main` as **`2bef681`**; the preview has now been confirmed on a new Shop bundle. No Lovable Publish action was used.
+The Categories and Products requests started together and both returned HTTP 200 about **1.12 s** later. Product images and specifications also returned HTTP 200; no catalog REST errors appeared in the recent Supabase log window. This makes the share-preview's unbundled development module waterfall the strongest measured cause of the apparent delay. The exact delay will vary with browser, cache, device, and network; this sandbox sample was slower than the reported 7–8 seconds.
 
-The updated browser run confirms the intended progressive behavior—cards are visible while the image/specification notice is still present—but does **not** establish an end-to-end speedup. The before/after runs have materially different navigation/API timings, and the Shop route was slower overall in the post-sync sample. A controlled repeat on the user’s actual mobile connection is still needed to judge the reported 8–10 seconds.
+I also checked the likely production address `https://tnt-power-hub.lovable.app/`: it currently displays **“Project not found”** and **“Publish or update your Lovable project for it to appear here.”** The project has not been published to that default public domain. The code is synced to preview, but a published production build is the needed next step for customer-facing speed testing.
 
-## Live data and database evidence
+**No app-code change, database write, Storage operation, or Lovable Publish action was made in this follow-up.** I will not publish the store without your explicit go-ahead.
 
-At the time of the read-only audit, the database contained 42 active products, 4 active categories, 98 product-image rows, and 149 specification rows. Read-only `EXPLAIN ANALYZE` measured the active category query at **1.170 ms** execution time (**1.295 ms** planning) and the active product query at **0.296 ms** execution (**1.603 ms** planning). Earlier execution samples were 0.142 ms for categories and 0.276 ms for products. These plans are not browser/API timings, but they provide no evidence that SQL execution explains an 8–10 second wait.
+## Reproduced browser evidence
 
-Supabase gateway logs for the primary Lovable preview during the sampled recent period showed:
+The measured route was the project’s Lovable-managed share-preview host, which serves the same preview shown through the `lovable.dev/share-preview/...` link.
 
-| Endpoint       | Requests | p50 origin time | p95 origin time | Maximum |
-| -------------- | -------: | --------------: | --------------: | ------: |
-| Categories     |       32 |        376.5 ms |        880.5 ms |  967 ms |
-| Products       |       35 |          371 ms |        938.1 ms |  957 ms |
-| Product images |       32 |          190 ms |        534.2 ms |  558 ms |
-| Specifications |       32 |          193 ms |        403.4 ms |  467 ms |
+| Measurement                                |                                   Result |
+| ------------------------------------------ | ---------------------------------------: |
+| Document response start                    |                                 4,296 ms |
+| First Contentful Paint                     |                                 5,624 ms |
+| Window load event                          |                                 9,327 ms |
+| JavaScript module requests                 | 186 total: 185 project-host + 1 external |
+| JavaScript encoded / transferred bytes     |              2,823,854 / 2,879,354 bytes |
+| First script start                         |                                 4,304 ms |
+| Last app modules finished                  |                                23,481 ms |
+| Categories and Products request start      |                    23,626 ms, concurrent |
+| Categories and Products response           |           HTTP 200, ~1,124/1,125 ms each |
+| Product images response                    |                        HTTP 200, ~286 ms |
+| Specifications response                    |                        HTTP 200, ~813 ms |
+| Catalog REST errors in this browser sample |                                        0 |
 
-These are Supabase gateway origin times, **not** full browser request, JavaScript startup, image decode, or page-render measurements.
+At the sample’s initial page capture, the hero and page shell were visible but the UI still displayed “Loading categories…” and “Loading products…”. A later capture showed four categories and product cards after the requests completed. The gap is before the Supabase requests, while the preview’s module graph is being fetched and executed.
 
-## Browser measurements
+A fresh 24-hour Supabase log aggregate supports that distinction:
 
-The baseline and post-sync tests were taken in the same authenticated sandbox browser, but across separate navigations with variable cache/network conditions. Many shared assets were cached in the baseline. Values are milliseconds from navigation start; API end times are the relevant response milestones. “Core ready” is the later of the category and product responses. Exact first-card DOM insertion was not instrumented, so core-ready is a proxy; in the updated Shop screenshot, the cards were visible while the metadata-loading notice was still present.
+| Endpoint       | GETs | p50 origin time | p95 origin time |  Maximum | HTTP errors |
+| -------------- | ---: | --------------: | --------------: | -------: | ----------: |
+| Products       |   59 |          365 ms |          853 ms | 1,018 ms |           0 |
+| Categories     |   57 |          370 ms |        1,021 ms | 1,145 ms |           0 |
+| Product images |   56 |          220 ms |          634 ms | 1,157 ms |           0 |
+| Specifications |   56 |          257 ms |          968 ms | 1,173 ms |           0 |
 
-| Route        | Run      | Response start / FCP | Categories + products                           | Images/specifications                    | Observation                                                                                                                                                  |
-| ------------ | -------- | -------------------- | ----------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Home `/`     | Baseline | 1,899 / 3,156        | Started 3,781; products 5,039; categories 5,038 | Started 5,092; specs 5,367; images 5,436 | Old sequential loader’s data-ready boundary was about 5.44 s. Eight featured cards were present in a later inspection.                                       |
-| Home `/`     | Updated  | 1,619 / 1,884        | Started 2,444; products 2,738; categories 3,212 | Started 3,279; specs 3,588; images 3,622 | Core data was ready at about 3.21 s; metadata finished later. Categories remain before Featured Products.                                                    |
-| Categories   | Baseline | 722 / 924            | Started 1,779; products 2,369; categories 2,686 | Started 2,689; specs 3,027; images 3,036 | Four category cards were visible after the category data arrived.                                                                                            |
-| Categories   | Updated  | 584 / 784            | Started 1,433; products 1,688; categories 1,721 | Started 1,741; specs 2,067; images 2,236 | Four category cards displayed; they did not wait for image/specification rows.                                                                               |
-| Shop `/shop` | Baseline | 808 / 1,044          | Started 1,930; categories 2,234; products 2,239 | Started 2,257; images 2,550; specs 2,595 | 42 products after load; the old UI briefly showed a zero count while the query was pending.                                                                  |
-| Shop `/shop` | Updated  | 2,181 / 3,328        | Started 3,466; products 3,775; categories 4,346 | Started 4,475; images 4,762; specs 4,794 | 42 cards were visible with neutral placeholders while the metadata notice was displayed. Core-ready was about 4.35 s, metadata completed about 0.45 s later. |
+These are server-side gateway origin times, not full browser timings. The read-only database plans are still about **0.3–1.2 ms** execution time, so database indexing/RLS changes are not justified as a fix for this symptom. Supabase advisors flag policy-optimization opportunities, but the measured catalog query plans and request logs do not implicate them in a 7–8 second wait. I made no RLS changes.
 
-The baseline route chunks were also late relative to the app shell: the Categories chunk took about **845 ms** (start 881 ms, end 1,726 ms), and the old Shop chunk about **899 ms** (start 969 ms, end 1,868 ms), completing just before their API calls. On the baseline homepage, FCP preceded category/product requests by about 625 ms. This points to client startup/request sequencing in addition to Supabase response time.
+## Why preview is slower than production
 
-The updated Shop route loaded a different hashed chunk, **`shop-ll0_gTPD.js`**, rather than the pre-change **`shop-C_tuc0VJ.js`**. A fresh load also showed 42 product cards with the “Loading product photos and specifications” notice and neutral image placeholders, confirming the progressive UI reached the preview. An earlier reload had still returned the old chunk; that transient stale run is excluded from the valid after measurements above.
+Lovable’s project share-preview is a development environment. It serves many individual source modules and development runtime code instead of a small number of production-optimized bundles. The current repository’s local production build generated **49 JavaScript assets totaling 861,422 bytes** (all routes combined; the homepage loads only a subset). This is a different, optimized artifact from the preview’s 186-request module graph, so it is not a strict same-route benchmark, but it confirms production packaging is materially smaller and avoids the same development-module waterfall.
 
-### What the before/after does—and does not—show
+The browser-level root of this delay is therefore not the number of product rows or oversized images: Categories and Products requests begin only after the preview’s app modules finish. Compressing/removing large Storage images can improve photo download time once image URLs are requested, but it cannot move that initial API-request start earlier.
 
-The updated homepage reached the core-response boundary at 3.21 s versus the old loader’s 5.44 s data-ready boundary; the Categories data boundary was 1.72 s versus 2.69 s; the Shop core boundary was 4.35 s versus the old full-data boundary of 2.60 s. These raw differences are **not** a controlled causal comparison: the updated Shop requests began about 1.54 s later and its category request took about 0.88 s instead of 0.30 s, while the updated homepage request wave started about 1.34 s earlier. Browser/network/cache variance is substantial. The updated screenshots confirm that cards are no longer held for ancillary metadata, but exact first-card insertion time and a repeat on the user's actual mobile connection remain outstanding. Do not claim a measured end-to-end speedup from these runs.
+## Query dependencies in the app
 
-On the baseline homepage, eight product image elements were present. Six lazy same-origin product images loaded at about 55–71 KB each (1024×1024); no `product-images` Supabase Storage object was downloaded during that sample. Thus, the oversized Storage objects remain a separate optimization target, but they did not account for the first-card delay on that particular homepage run.
+The current app starts its category and base-product queries concurrently. Product cards are then held until both finish because the base loader uses the active categories to filter products and map category slugs. The separate images/specification query runs only after the base catalog is available and no longer blocks product cards. Categories cards themselves wait only for the category request.
 
-## Changes made
+This dependency can make products wait for the slower of the Categories and Products responses, but the requests are not serial and observed gateway p95 values are around one second. It does not explain the measured 14-second gap between the final development modules and the API start. I found no justified source-code change that would fix the main observed share-preview delay more safely than testing the published production build.
 
-- Split catalog loading so category/core product data is fetched independently from per-product image/specification metadata. Product cards can render as soon as the core data is ready instead of waiting for the second metadata wave.
-- Fetch ancillary rows scoped to selected product IDs; keep cache invalidation compatible with product edits.
-- Added neutral pending-image placeholders across cards, quick view, product detail, cart, and wishlist. Existing category-image fallback remains for products confirmed to have no uploaded image. A metadata-query error no longer blocks the core listing and is surfaced as a non-blocking warning.
-- Kept specification-based search available after details arrive and added a non-blocking notice while image/specification details are still loading.
-- Changed the Shop count to “Loading products…” while the base catalog is pending, avoiding a misleading zero count.
-- Existing homepage ordering and append-style “Show more” behavior were not changed.
+## Earlier work and preserved measurements
 
-The old sequence added a separate metadata wait of about **0.36 s** on the baseline Shop run and about **0.40 s** on the baseline homepage run. The post-sync Shop run likewise showed metadata finishing about **0.45 s** after core data. These are measured request gaps, not proof of total page-load improvement.
+- Commit `2bef681` separates core catalog rows from image/specification metadata, adds neutral pending-image placeholders, and corrects the Shop loading count. The preview served the updated Shop bundle in earlier tests; cards were visible while ancillary metadata was still loading.
+- Before/after preview navigation runs had material network/cache variance and were not a controlled end-to-end speed comparison. The earlier report’s home/category/shop milestones are retained here only as context, not proof of a customer-side speedup.
+- The live database previously had 42 active products, 4 active categories, 98 product-image rows, and 149 specification rows. Read-only active category/product query execution measured 1.170 ms / 0.296 ms in the latest plan (earlier samples 0.142 / 0.276 ms).
+- The separate Storage audit found 64 objects totaling 115,516,412 bytes, of which 54 are referenced and 10 unreferenced. Three referenced originals exceed 5 MiB (largest 10,250,539 bytes). The full-admin replacement/removal workflow is still pending an authorized admin run; it is a separate image-byte optimization, not the cause of the delayed data-request start.
+- The Product Sub-admin authorization-header fix is in GitHub history, but the existing-product edit/delete flow still needs confirmation in the updated Lovable app.
 
-## Existing image cleanup and remaining work
+## What to do next
 
-The separate read-only Storage audit found 64 objects totaling 115,516,412 bytes: 54 objects referenced by products (114,747,660 bytes) and 10 unreferenced objects. Three referenced objects exceed 5 MiB; the largest is 10,250,539 bytes. No image object was modified or deleted during this performance task. The existing full-admin workflow uploads optimized replacements, changes references only after upload success, and removes an original only when it exceeds 5 MiB and a fresh database check confirms zero remaining references. It leaves the ten unreferenced objects untouched. A full admin still needs to run that action while signed in.
+1. Open the **TNT Tools Powerhouse** project in Lovable and use the **Publish** button at the top-right. Review the production URL Lovable presents; publish/update only when you are ready for the site to be publicly accessible. The project has not been published by me.
+2. Test the published `*.lovable.app` or custom-domain URL on your phone—not the `lovable.dev/share-preview/...` link. The default `tnt-power-hub.lovable.app` address is presently unpublished, so use the URL Lovable assigns during Publish if it differs.
+3. If the published site still takes 7–8 seconds, send me the exact public URL and a phone Network screenshot/timing. Then I can measure that production host rather than the development preview.
+4. Separately, a signed-in full admin can run the existing safe image replacement/removal action to reduce oversized photo payloads. This may improve photo appearance, but it is not the fix for the preview’s pre-API module waterfall.
 
-The Product Sub-admin authorization-header fix is in the pushed code history, but its original-product edit/delete path still needs confirmation in the updated Lovable app.
-
-## Validation and release status
-
-The project build passed, `npx tsc --noEmit` passed, ESLint reported **0 errors and 1 warning** (`react-refresh/only-export-components` in `src/lib/shop-store.tsx`), and Prettier/diff checks passed. App commit `2bef681` was pushed to GitHub `main`; documentation is maintained in later commits. No production database writes, schema changes, Storage replacements/deletions, or Lovable Publish action were performed in this audit.
-
-The alternate `lovableproject.com` alias returned a proxy 404 after sign-in, but the primary Lovable preview and project editor loaded. Lovable Settings → Git states that the project syncs with GitHub in both directions; a fresh preview load later confirmed the new Shop bundle. No publish action was used.
-
-## Next steps
-
-1. Repeat the same browser timings on the user's actual mobile connection, recording warm/cold cache state and directly capturing the first product-card insertion rather than using core-response completion as a proxy.
-2. Compare several runs before considering route prefetch/startup work or API/network delivery changes. Do not add indexes or weaken RLS without new evidence.
-3. Separately, a signed-in full admin can run the safe image-replacement/oversized-original cleanup; this reduces bytes on pages that use those Storage objects, but should not be presented as the fix for category-query latency.
-4. Verify the Product Sub-admin's existing-product edit/delete flow against the earlier `Unauthorized: No authorization header provided` message.
+Build, TypeScript, ESLint, formatting, and diff checks for the earlier app change passed; ESLint had 0 errors and 1 warning in `src/lib/shop-store.tsx`. No production publish was executed during this audit.
