@@ -16,13 +16,13 @@ Recent public Storage logs showed 48 successful image GETs with median size 1,89
 
 A current read-only Storage count found **64 objects / 115,516,412 bytes**, of which **54 are referenced** (**114,747,660 bytes**) and **10 are unreferenced**. Three referenced objects exceed 5 MiB; the largest is 10,250,539 bytes. No objects were changed by this audit. Keep the ten unreferenced objects untouched. The existing image conversion/removal action remains pending until a full admin explicitly runs it; it updates references first and deletes only over-5-MiB originals after verifying they have no remaining reference.
 
-The authenticated browser baseline is now recorded in `performance-audit-2026-10-23.md`; it did not reproduce the reported 8–10 seconds. GitHub `main` now contains commit `2bef681`, but the Lovable preview continued serving its pre-push Shop bundle, so a valid after-measurement is still pending. Do not claim an end-to-end speedup until the preview serves the pushed commit and the same routes are measured again, ideally on the user's mobile connection.
+The authenticated browser baseline and post-sync route timings are recorded in `performance-audit-2026-10-23.md`; neither reproduced the reported 8–10 seconds. A fresh Lovable load served the new Shop bundle from commit `2bef681` and showed product cards while ancillary image/specification data was still loading. The runs had materially different navigation/API timings, so they do not establish an end-to-end speedup. A controlled repeat and exact first-card insertion timing on the user's mobile connection remain open.
 
 ## Implemented low-risk catalog improvement
 
 Core product/card fields now load in a base catalog query; product images and specifications load in a separate query keyed only to the selected active, visible product IDs. Cards can render before that ancillary request finishes. Square neutral placeholders prevent the temporary category fallback from looking like an incorrect product photo. On successful detail loading, existing images/specifications and the category fallback for genuinely image-less products are preserved. On a detail-query error, product listings remain available and the main catalog/product pages show a warning. Existing query invalidation prefixes still cover both layers.
 
-This code change does not alter RLS, schema, data, image objects, product/category ordering, client-side filters/sorting, prices/stock, or append-style Show more behavior. Commit `2bef681` is pushed to GitHub `main`; Lovable Publish was not used. See [performance-audit-2026-10-23.md](performance-audit-2026-10-23.md) for the detailed measurements and validation record.
+This code change does not alter RLS, schema, data, image objects, product/category ordering, client-side filters/sorting, prices/stock, or append-style Show more behavior. Commit `2bef681` is pushed to GitHub `main` and its bundle was confirmed in Lovable preview; Lovable Publish was not used. See [performance-audit-2026-10-23.md](performance-audit-2026-10-23.md) for the detailed measurements and validation record.
 
 ## Image handling requirements
 
