@@ -38,6 +38,7 @@ export type Product = {
   stockLabel?: string;
   badges: string[];
   images: string[];
+  imagesPending?: boolean;
   features: string[];
   specs: { label: string; value: string }[];
 };

@@ -64,6 +64,8 @@ function Shop() {
     catalogCategories: categories,
     catalogLoading,
     catalogError,
+    catalogDetailsLoading,
+    catalogDetailsError,
   } = useShop();
   const brands = useMemo(
     () => [...new Set(products.map((product) => product.brand))].sort(),
@@ -257,13 +259,26 @@ function Shop() {
         )}
       </nav>
 
+      {catalogDetailsError && products.length > 0 && (
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          Product photos or specifications could not be loaded. Product listings remain available.
+        </p>
+      )}
+      {catalogDetailsLoading && products.length > 0 && (
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          Loading product photos and specifications; matching details will appear shortly.
+        </p>
+      )}
+
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
         <div className="min-w-0">
           <h1 className="text-3xl sm:text-4xl">
             {activeCategory ? activeCategory.name : "All Tools"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {filtered.length} product{filtered.length === 1 ? "" : "s"} available
+            {catalogLoading && products.length === 0
+              ? "Loading products…"
+              : `${filtered.length} product${filtered.length === 1 ? "" : "s"} available`}
           </p>
         </div>
         <button

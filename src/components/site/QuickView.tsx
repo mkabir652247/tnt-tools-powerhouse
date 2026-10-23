@@ -25,14 +25,22 @@ export function QuickView({ product, onClose }: { product: Product | null; onClo
         >
           <X width={18} height={18} />
         </button>
-        <img
-          src={product.images[0]}
-          alt={product.name}
-          loading="lazy"
-          width={1024}
-          height={1024}
-          className="aspect-square w-full rounded-sm object-cover"
-        />
+        {product.imagesPending ? (
+          <div
+            role="status"
+            aria-label={`Loading photo for ${product.name}`}
+            className="aspect-square w-full animate-pulse rounded-sm bg-surface-strong"
+          />
+        ) : (
+          <img
+            src={product.images[0]}
+            alt={product.name}
+            loading="lazy"
+            width={1024}
+            height={1024}
+            className="aspect-square w-full rounded-sm object-cover"
+          />
+        )}
         <div className="flex flex-col gap-3">
           <h3 className="pr-10 font-display text-xl font-extrabold">{product.name}</h3>
           {product.reviewCount > 0 ? (

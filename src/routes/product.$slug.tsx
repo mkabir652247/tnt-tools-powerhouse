@@ -55,6 +55,7 @@ function ProductPage() {
     catalogProducts,
     catalogLoading,
     catalogError,
+    catalogDetailsError,
     addToCart,
     toggleWishlist,
     isWishlisted,
@@ -103,6 +104,11 @@ function ProductPage() {
 
   return (
     <div className="container-tnt py-10">
+      {catalogDetailsError && (
+        <p role="status" className="mb-4 text-sm text-muted-foreground">
+          Some product photos or specifications could not be loaded.
+        </p>
+      )}
       <nav className="text-xs text-muted-foreground">
         <Link to="/" className="hover:text-primary">
           Home
@@ -117,36 +123,46 @@ function ProductPage() {
       <div className="mt-6 grid gap-10 lg:grid-cols-2">
         <div>
           <div className="overflow-hidden rounded-lg border border-border bg-surface">
-            <img
-              src={product.images[active]}
-              alt={product.name}
-              width={1024}
-              height={1024}
-              className="aspect-square w-full object-cover"
-            />
+            {product.imagesPending ? (
+              <div
+                role="status"
+                aria-label={`Loading photo for ${product.name}`}
+                className="aspect-square w-full animate-pulse bg-surface-strong"
+              />
+            ) : (
+              <img
+                src={product.images[active]}
+                alt={product.name}
+                width={1024}
+                height={1024}
+                className="aspect-square w-full object-cover"
+              />
+            )}
           </div>
-          <div className="mt-3 flex gap-3">
-            {product.images.map((img, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setActive(i)}
-                aria-label={`View image ${i + 1}`}
-                className={`h-20 w-20 overflow-hidden rounded-sm border transition-colors ${
-                  active === i ? "border-primary" : "border-border hover:border-primary/60"
-                }`}
-              >
-                <img
-                  src={img}
-                  alt=""
-                  loading="lazy"
-                  width={1024}
-                  height={1024}
-                  className="h-full w-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
+          {!product.imagesPending && (
+            <div className="mt-3 flex gap-3">
+              {product.images.map((img, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActive(i)}
+                  aria-label={`View image ${i + 1}`}
+                  className={`h-20 w-20 overflow-hidden rounded-sm border transition-colors ${
+                    active === i ? "border-primary" : "border-border hover:border-primary/60"
+                  }`}
+                >
+                  <img
+                    src={img}
+                    alt=""
+                    loading="lazy"
+                    width={1024}
+                    height={1024}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>

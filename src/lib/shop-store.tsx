@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Category, type Product } from "@/data/products";
-import { loadStoreCatalog, loadStoreCategories } from "@/lib/catalog";
+import { loadStoreCatalogBase, loadStoreCategories, loadStoreProductDetails } from "@/lib/catalog";
 
 export type CartLine = { id: string; qty: number };
 
@@ -33,6 +33,8 @@ type ShopState = {
   catalogCategories: Category[];
   catalogLoading: boolean;
   catalogError: boolean;
+  catalogDetailsLoading: boolean;
+  catalogDetailsError: boolean;
   catalogCategoriesLoading: boolean;
   catalogCategoriesError: boolean;
 };
@@ -74,10 +76,10 @@ export function ShopProvider({
     enabled: loadCatalog,
     staleTime: CATEGORIES_STALE_TIME,
   });
-  const catalogQuery = useQuery({
-    queryKey: ["storefront", "catalog"],
+  const catalogBaseQuery = useQuery({
+    queryKey: ["storefront", "catalog", "base"],
     queryFn: () =>
-      loadStoreCatalog(
+      loadStoreCatalogBase(
         queryClient.ensureQueryData({
           queryKey: CATEGORIES_QUERY_KEY,
           queryFn: loadStoreCategories,
@@ -87,7 +89,45 @@ export function ShopProvider({
     enabled: loadCatalog,
     staleTime: 60_000,
   });
-  const catalogProducts = catalogQuery.data?.products ?? EMPTY_PRODUCTS;
+  const productIds = catalogBaseQuery.data?.productIds ?? [];
+  const catalogDetailsQuery = useQuery({
+    queryKey: ["storefront", "catalog", "details", productIds],
+    queryFn: () => loadStoreProductDetails(productIds),
+    enabled: loadCatalog && catalogBaseQuery.isSuccess && productIds.length > 0,
+    staleTime: 60_000,
+  });
+  const catalogProducts = useMemo(
+    () =>
+      (catalogBaseQuery.data?.products ?? EMPTY_PRODUCTS).map((product) => {
+        const details = catalogDetailsQuery.data?.[product.id];
+        if (!details) {
+          return catalogDetailsQuery.isError ? { ...product, imagesPending: false } : product;
+        }
+
+        const shortDescription = catalogBaseQuery.data?.shortDescriptions[product.id] ?? "";
+        const spec =
+          shortDescription ||
+          details.specs
+            .slice(0, 3)
+            .map((item) => `${item.label}: ${item.value}`)
+            .join(" · ");
+
+        return {
+          ...product,
+          spec: spec || "Professional-grade equipment",
+          images: details.images.length > 0 ? details.images : product.images,
+          imagesPending: false,
+          features:
+            details.specs.length > 0
+              ? details.specs.map((item) => `${item.label}: ${item.value}`)
+              : shortDescription
+                ? [shortDescription]
+                : [],
+          specs: details.specs,
+        };
+      }),
+    [catalogBaseQuery.data, catalogDetailsQuery.data, catalogDetailsQuery.isError],
+  );
   const catalogCategories = categoriesQuery.data ?? EMPTY_CATEGORIES;
 
   useEffect(() => {
@@ -178,8 +218,10 @@ export function ShopProvider({
     placeOrder,
     catalogProducts,
     catalogCategories,
-    catalogLoading: catalogQuery.isLoading,
-    catalogError: Boolean(catalogQuery.error),
+    catalogLoading: catalogBaseQuery.isLoading,
+    catalogError: Boolean(catalogBaseQuery.error),
+    catalogDetailsLoading: catalogDetailsQuery.isLoading,
+    catalogDetailsError: Boolean(catalogDetailsQuery.error),
     catalogCategoriesLoading: categoriesQuery.isLoading,
     catalogCategoriesError: Boolean(categoriesQuery.error),
   };

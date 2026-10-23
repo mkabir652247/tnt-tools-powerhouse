@@ -9,7 +9,14 @@ import {
 export type StoreCatalog = {
   categories: Category[];
   products: Product[];
+  productIds: string[];
+  shortDescriptions: Record<string, string>;
 };
+
+export type StoreProductDetails = Record<
+  string,
+  { images: string[]; specs: { label: string; value: string }[] }
+>;
 
 export type StoreCategory = Category & { id: string; parent_category_id: string | null };
 
@@ -66,7 +73,8 @@ function inferProductType(name: string, category: string): Product["type"] {
   return "Corded";
 }
 
-export async function loadStoreCatalog(
+/** Load the fields required to render product cards before ancillary image/specification requests. */
+export async function loadStoreCatalogBase(
   categoryRowsPromise: Promise<StoreCategory[]>,
 ): Promise<StoreCatalog> {
   const [categoryRows, { data: productRows, error: productError }] = await Promise.all([
@@ -85,87 +93,29 @@ export async function loadStoreCatalog(
   const visibleCategories = categoryRows.map(
     ({ id: _id, parent_category_id: _parentCategoryId, ...category }) => category,
   );
-  const allRows = productRows ?? [];
-
-  if (allRows.length === 0) {
-    return {
-      categories: visibleCategories,
-      products: [],
-    };
-  }
-
   const activeCategoryIds = new Set(categoryRows.map((category) => category.id));
-  const rows = allRows.filter(
+  const rows = (productRows ?? []).filter(
     (product) => !product.category_id || activeCategoryIds.has(product.category_id),
   );
-  if (rows.length === 0) {
-    return {
-      categories: visibleCategories,
-      products: [],
-    };
-  }
-
-  const productIds = rows.map((product) => product.id);
-  const [
-    { data: imageRows, error: imageError },
-    { data: specificationRows, error: specificationError },
-  ] = await Promise.all([
-    supabase
-      .from("product_images")
-      .select("product_id, image_url, alt_text, display_order")
-      .in("product_id", productIds)
-      .order("display_order"),
-    supabase
-      .from("product_specifications")
-      .select("product_id, specification_name, specification_value, display_order")
-      .in("product_id", productIds)
-      .order("display_order"),
-  ]);
-
-  if (imageError) throw imageError;
-  if (specificationError) throw specificationError;
-
   const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
-  const imagesByProduct = new Map<string, string[]>();
-  for (const image of imageRows ?? []) {
-    const urls = imagesByProduct.get(image.product_id) ?? [];
-    if (image.image_url.trim()) urls.push(image.image_url.trim());
-    imagesByProduct.set(image.product_id, urls);
-  }
-
-  const specificationsByProduct = new Map<string, { label: string; value: string }[]>();
-  for (const specification of specificationRows ?? []) {
-    const list = specificationsByProduct.get(specification.product_id) ?? [];
-    list.push({
-      label: specification.specification_name,
-      value: specification.specification_value,
-    });
-    specificationsByProduct.set(specification.product_id, list);
-  }
+  const shortDescriptions: Record<string, string> = {};
 
   const mappedProducts: Product[] = rows.map((row) => {
     const categoryRow = row.category_id ? categoryById.get(row.category_id) : undefined;
     const categorySlug = categoryRow?.slug ?? "other-power-tools";
-    const specs = specificationsByProduct.get(row.id) ?? [];
-    const images = imagesByProduct.get(row.id) ?? [];
     const price = Number(row.price);
     const compareAtPrice = row.compare_at_price == null ? undefined : Number(row.compare_at_price);
     const stock = row.stock_quantity ?? 0;
     const lowStockThreshold = row.low_stock_threshold ?? 5;
     const shortDescription = row.short_description?.trim() ?? "";
+    shortDescriptions[row.id] = shortDescription;
     const description = row.description?.trim() || shortDescription || row.name;
-    const spec =
-      shortDescription ||
-      specs
-        .slice(0, 3)
-        .map((item) => `${item.label}: ${item.value}`)
-        .join(" · ");
 
     return {
       id: row.id,
       slug: row.slug,
       name: row.name,
-      spec: spec || "Professional-grade equipment",
+      spec: shortDescription || "Professional-grade equipment",
       description,
       brand: row.brand?.trim() || "TNT Tools",
       category: categorySlug,
@@ -185,19 +135,64 @@ export async function loadStoreCatalog(
         ...(row.is_featured ? ["Featured"] : []),
         ...(stock > 0 && stock <= lowStockThreshold ? ["Limited Stock"] : []),
       ],
-      images: images.length > 0 ? images : [categoryImage(categorySlug)],
-      features:
-        specs.length > 0
-          ? specs.map((item) => `${item.label}: ${item.value}`)
-          : shortDescription
-            ? [shortDescription]
-            : [],
-      specs,
+      images: [categoryImage(categorySlug)],
+      imagesPending: true,
+      features: shortDescription ? [shortDescription] : [],
+      specs: [],
     };
   });
 
   return {
     categories: visibleCategories,
     products: mappedProducts,
+    productIds: rows.map((row) => row.id),
+    shortDescriptions,
   };
+}
+
+/** Load only the image/specification rows for products already selected by the active catalog query. */
+export async function loadStoreProductDetails(productIds: string[]): Promise<StoreProductDetails> {
+  if (productIds.length === 0) return {};
+
+  const [
+    { data: imageRows, error: imageError },
+    { data: specificationRows, error: specificationError },
+  ] = await Promise.all([
+    supabase
+      .from("product_images")
+      .select("product_id, image_url, alt_text, display_order")
+      .in("product_id", productIds)
+      .order("display_order"),
+    supabase
+      .from("product_specifications")
+      .select("product_id, specification_name, specification_value, display_order")
+      .in("product_id", productIds)
+      .order("display_order"),
+  ]);
+
+  if (imageError) throw imageError;
+  if (specificationError) throw specificationError;
+
+  const details: StoreProductDetails = Object.fromEntries(
+    productIds.map((productId) => [productId, { images: [], specs: [] }]),
+  );
+
+  for (const image of imageRows ?? []) {
+    const productDetails = details[image.product_id];
+    if (productDetails && image.image_url.trim()) {
+      productDetails.images.push(image.image_url.trim());
+    }
+  }
+
+  for (const specification of specificationRows ?? []) {
+    const productDetails = details[specification.product_id];
+    if (productDetails) {
+      productDetails.specs.push({
+        label: specification.specification_name,
+        value: specification.specification_value,
+      });
+    }
+  }
+
+  return details;
 }

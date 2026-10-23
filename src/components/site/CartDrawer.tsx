@@ -45,14 +45,21 @@ export function CartDrawer() {
             <ul className="flex flex-col gap-4">
               {detailedCart.map(({ product, qty }) => (
                 <li key={product.id} className="grid grid-cols-[64px_minmax(0,1fr)] gap-3">
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    loading="lazy"
-                    width={1024}
-                    height={1024}
-                    className="h-16 w-16 rounded-sm object-cover"
-                  />
+                  {product.imagesPending ? (
+                    <div
+                      aria-hidden="true"
+                      className="h-16 w-16 animate-pulse rounded-sm bg-surface-strong"
+                    />
+                  ) : (
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      loading="lazy"
+                      width={1024}
+                      height={1024}
+                      className="h-16 w-16 rounded-sm object-cover"
+                    />
+                  )}
                   <div className="min-w-0">
                     <p className="truncate font-display text-sm font-bold">{product.name}</p>
                     <p className="text-sm text-primary">{formatPrice(product.price)}</p>
@@ -100,10 +107,18 @@ export function CartDrawer() {
             </span>
           </div>
           <div className="grid gap-2">
-            <Link to="/checkout" onClick={() => setCartOpen(false)} className="btn-orange w-full text-sm">
+            <Link
+              to="/checkout"
+              onClick={() => setCartOpen(false)}
+              className="btn-orange w-full text-sm"
+            >
               Checkout
             </Link>
-            <Link to="/cart" onClick={() => setCartOpen(false)} className="btn-ghost-outline w-full text-sm">
+            <Link
+              to="/cart"
+              onClick={() => setCartOpen(false)}
+              className="btn-ghost-outline w-full text-sm"
+            >
               View Cart
             </Link>
           </div>

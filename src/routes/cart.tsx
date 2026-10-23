@@ -39,14 +39,21 @@ function CartPage() {
                 key={product.id}
                 className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 rounded-lg border border-border bg-surface p-4"
               >
-                <img
-                  src={product.images[0]}
-                  alt={product.name}
-                  loading="lazy"
-                  width={1024}
-                  height={1024}
-                  className="h-22 w-22 rounded-sm object-cover"
-                />
+                {product.imagesPending ? (
+                  <div
+                    aria-hidden="true"
+                    className="h-22 w-22 animate-pulse rounded-sm bg-surface-strong"
+                  />
+                ) : (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    loading="lazy"
+                    width={1024}
+                    height={1024}
+                    className="h-22 w-22 rounded-sm object-cover"
+                  />
+                )}
                 <div className="min-w-0">
                   <Link
                     to="/product/$slug"

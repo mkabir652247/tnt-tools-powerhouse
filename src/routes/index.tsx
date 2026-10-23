@@ -117,6 +117,7 @@ function Home() {
     catalogProducts: products,
     catalogLoading,
     catalogError,
+    catalogDetailsError,
     catalogCategoriesLoading,
     catalogCategoriesError,
   } = useShop();
@@ -251,6 +252,12 @@ function Home() {
             eyebrow={showAllProducts ? "Product Catalog" : "Featured Products"}
             title={showAllProducts ? "Tools for Every Job" : "Tools That Earn Their Keep"}
           />
+          {catalogDetailsError && products.length > 0 && (
+            <p role="status" className="mt-4 text-sm text-muted-foreground">
+              Product photos or specifications could not be loaded. Product listings remain
+              available.
+            </p>
+          )}
           <div
             id="homepage-product-grid"
             className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"

@@ -107,14 +107,21 @@ function Account() {
                       key={p.id}
                       className="grid grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-sm border border-border p-3"
                     >
-                      <img
-                        src={p.images[0]}
-                        alt={p.name}
-                        loading="lazy"
-                        width={1024}
-                        height={1024}
-                        className="h-14 w-14 rounded-sm object-cover"
-                      />
+                      {p.imagesPending ? (
+                        <div
+                          aria-hidden="true"
+                          className="h-14 w-14 animate-pulse rounded-sm bg-surface-strong"
+                        />
+                      ) : (
+                        <img
+                          src={p.images[0]}
+                          alt={p.name}
+                          loading="lazy"
+                          width={1024}
+                          height={1024}
+                          className="h-14 w-14 rounded-sm object-cover"
+                        />
+                      )}
                       <Link
                         to="/product/$slug"
                         params={{ slug: p.slug }}

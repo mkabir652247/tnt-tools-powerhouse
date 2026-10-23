@@ -19,15 +19,19 @@ export function ProductCard({
     <article className="card-tool group relative flex flex-col overflow-hidden">
       <div className="relative aspect-square overflow-hidden bg-surface-strong">
         <Link to="/product/$slug" params={{ slug: product.slug }} aria-label={product.name}>
-          <img
-            src={product.images[0]}
-            alt={product.name}
-            loading="lazy"
-            decoding="async"
-            width={1024}
-            height={1024}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          {product.imagesPending ? (
+            <div aria-hidden="true" className="h-full w-full animate-pulse bg-surface" />
+          ) : (
+            <img
+              src={product.images[0]}
+              alt={product.name}
+              loading="lazy"
+              decoding="async"
+              width={1024}
+              height={1024}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          )}
         </Link>
 
         <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1.5">
