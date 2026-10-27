@@ -21,3 +21,5 @@
 - [ ] **Verify Product Sub-admin edit/delete authentication after Lovable sync.** Preserve the existing `product_manager` permissions: edits/deletions pass through the authenticated server function and service-only RPCs, and the browser never calls privileged RPCs directly. The product form forwards the current Supabase access token as a Bearer header; confirm in the signed-in Lovable app because the previous preview showed `Unauthorized: No authorization header provided`.
 
 **Latest database-only timing note (October 23):** a fresh read-only EXPLAIN measured category execution at 1.170 ms and product execution at 0.296 ms (planning 1.295 ms and 1.603 ms). Earlier runs were 0.142 ms and 0.276 ms; neither run measures browser/API/image transfer end-to-end.
+
+- [x] **Update public contact details.** The Customer Support footer shows only rahatamaan9@gmail.com; it no longer displays a phone number or address. A floating bottom-right WhatsApp button opens a chat with +92 308 4499769. The Contact page also links to WhatsApp and uses the provided email.

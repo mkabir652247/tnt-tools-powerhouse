@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Clock, Mail, MapPin, Phone } from "lucide-react";
+import { Clock, Mail, MessageCircle } from "lucide-react";
 import { z } from "zod";
+import { CONTACT_EMAIL, WHATSAPP_LINK, WHATSAPP_PHONE_DISPLAY } from "@/lib/contact-details";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -13,7 +14,10 @@ export const Route = createFileRoute("/contact")({
           "Contact the TNT Tools team for product advice, bulk pricing, warranty claims and after-sales support.",
       },
       { property: "og:title", content: "Contact TNT Tools — Sales & Support" },
-      { property: "og:description", content: "Product advice, bulk pricing and after-sales support." },
+      {
+        property: "og:description",
+        content: "Product advice, bulk pricing and after-sales support.",
+      },
     ],
   }),
   component: Contact,
@@ -55,7 +59,11 @@ function Contact() {
       </p>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <form onSubmit={onSubmit} className="rounded-lg border border-border bg-surface p-6" noValidate>
+        <form
+          onSubmit={onSubmit}
+          className="rounded-lg border border-border bg-surface p-6"
+          noValidate
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name" name="name" error={errors["name"]} />
             <Field label="Email" name="email" type="email" error={errors["email"]} />
@@ -83,16 +91,21 @@ function Contact() {
           <h2 className="font-display text-lg font-extrabold uppercase tracking-wide">Reach Us</h2>
           <ul className="mt-5 space-y-4 text-sm text-muted-foreground">
             <li className="flex gap-3">
-              <Phone width={18} height={18} className="mt-0.5 shrink-0 text-primary" />
-              +92 300 000 0000
+              <MessageCircle width={18} height={18} className="mt-0.5 shrink-0 text-primary" />
+              <a
+                href={WHATSAPP_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary"
+              >
+                WhatsApp: {WHATSAPP_PHONE_DISPLAY}
+              </a>
             </li>
             <li className="flex gap-3">
               <Mail width={18} height={18} className="mt-0.5 shrink-0 text-primary" />
-              support@tnttools.example
-            </li>
-            <li className="flex gap-3">
-              <MapPin width={18} height={18} className="mt-0.5 shrink-0 text-primary" />
-              Tool Market Road, Karachi, Pakistan
+              <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-primary">
+                {CONTACT_EMAIL}
+              </a>
             </li>
             <li className="flex gap-3">
               <Clock width={18} height={18} className="mt-0.5 shrink-0 text-primary" />
@@ -100,8 +113,7 @@ function Contact() {
             </li>
           </ul>
           <p className="mt-5 text-xs text-muted-foreground">
-            These contact details are placeholders — send us your real phone, email and address and
-            we will put them in.
+            For quick assistance, message us on WhatsApp or email our team.
           </p>
         </aside>
       </div>

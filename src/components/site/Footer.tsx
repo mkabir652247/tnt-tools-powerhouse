@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Mail, Youtube } from "lucide-react";
 import { useShop } from "@/lib/shop-store";
+import { CONTACT_EMAIL } from "@/lib/contact-details";
 import { Logo } from "./Logo";
 
 export function Footer() {
@@ -86,16 +87,10 @@ export function Footer() {
           </h3>
           <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
-              <Phone width={16} height={16} className="mt-0.5 shrink-0 text-primary" />
-              <span>+92 300 000 0000</span>
-            </li>
-            <li className="flex items-start gap-2">
               <Mail width={16} height={16} className="mt-0.5 shrink-0 text-primary" />
-              <span>support@tnttools.example</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <MapPin width={16} height={16} className="mt-0.5 shrink-0 text-primary" />
-              <span>Tool Market Road, Karachi, Pakistan</span>
+              <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-primary">
+                {CONTACT_EMAIL}
+              </a>
             </li>
           </ul>
           <form
